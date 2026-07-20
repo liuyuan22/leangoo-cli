@@ -1,0 +1,71 @@
+---
+name: leangoo-shared
+description: >-
+  Leangoo（领歌）CLI 共享规则：安装 leangoo 二进制、auth 登录/退出/状态、会话目录、
+  企业切换前提、JSON 输出约定。在用户提到领歌、lg.team、Leangoo、看板登录，
+  或执行任何 leangoo 命令前未登录/会话过期时使用。
+---
+
+# leangoo-cli 共享规则
+
+通过 **`leangoo`** 命令行操作领歌在线版（`lg.team`）。非官方网页接口，改版可能失效。
+
+## 安装与可用性
+
+优先确认二进制可用：
+
+```bash
+which leangoo || ./bin/leangoo version
+```
+
+若没有：
+
+```bash
+# 在本仓库
+go build -o bin/leangoo ./cmd/leangoo
+# 建议加入 PATH
+cp bin/leangoo /usr/local/bin/leangoo
+```
+
+Agent 调用时优先用 PATH 中的 `leangoo`；若仅有仓库产物，用绝对路径或 `./bin/leangoo`。
+
+## 认证
+
+会话文件：`~/.leangoo-cli/session.json`（Cookie + 当前企业，**不含明文密码**）。
+
+```bash
+leangoo auth status          # 是否已登录
+leangoo auth logout          # 清除本地会话
+```
+
+### 登录（Agent 注意）
+
+交互式 `leangoo auth login` 会提示手机号 / 方式 / 密码，**不适合在非交互 Agent 环境阻塞等待**。
+
+Agent 应：
+
+1. 先跑 `leangoo auth status`
+2. 若未登录：告诉用户在终端执行 `leangoo auth login`（交互），或请用户提供后用非交互参数代为执行：
+
+```bash
+leangoo auth login --phone <账号> --password '<密码>'
+leangoo auth send-code --phone <手机号>
+leangoo auth login --phone <手机号> --code <验证码>
+```
+
+3. **不要**把用户密码写入仓库、日志或 skill 文件；命令行历史也有泄露风险，优先让用户本地交互登录。
+
+## 输出约定
+
+- 命令默认输出 **JSON**（便于解析）
+- 先选企业再查项目/Sprint/Story：`leangoo ent list` → `leangoo ent use <id>`
+- 团队版企业 id 为 `-1`，入口为 `/kanban/board_list`
+
+## 领域技能
+
+| Skill | 用途 |
+|-------|------|
+| `leangoo-sprint` | 企业 / 项目 / Sprint（看板）列表与结构 |
+| `leangoo-story` | Story（卡片）列表与详情（描述、动态） |
+
+未登录或报会话无效时，回到本 skill 处理认证。

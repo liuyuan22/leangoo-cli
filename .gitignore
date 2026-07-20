@@ -1,0 +1,7 @@
+# Ignore
+/bin/
+/dist/
+*.exe
+.DS_Store
+.env
+*.token

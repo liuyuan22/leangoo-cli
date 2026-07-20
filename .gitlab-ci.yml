@@ -1,0 +1,28 @@
+stages:
+  - release
+
+variables:
+  GIT_DEPTH: 0
+
+# 仅在 v* tag 时发版。请在 GitLab CI/CD Variables 中配置：
+#   GITLAB_TOKEN = Project/Personal Access Token（api 权限，Masked）
+# 若变量勾了 Protected，请同时 Protect 对应 tag（如 v*）。
+# 切勿把 token 写进仓库。
+release:
+  stage: release
+  image:
+    name: goreleaser/goreleaser:v2.8.2
+    entrypoint: [""]
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\./
+  script:
+    - |
+      if [ -z "${GITLAB_TOKEN:-}" ]; then
+        echo "缺少 CI/CD Variable: GITLAB_TOKEN（api 权限）" >&2
+        exit 1
+      fi
+    - goreleaser release --clean
+  artifacts:
+    paths:
+      - dist/
+    expire_in: 7 days

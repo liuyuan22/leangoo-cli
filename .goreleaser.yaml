@@ -1,0 +1,76 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+project_name: leangoo
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: leangoo
+    main: ./cmd/leangoo
+    binary: leangoo
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w -X github.com/deepglint/leangoo-cli/internal/cmd.Version={{.Version}}
+
+archives:
+  - id: default
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else }}{{ .Arch }}{{ end }}
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - README.md
+      - skills/**/*
+
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+
+release:
+  draft: false
+  make_latest: true
+  name_template: "{{.Tag}}"
+  header: |
+    ## leangoo {{.Tag}}
+
+    安装（私有仓库需 `GITLAB_TOKEN`）：
+
+    ```bash
+    curl -fsSL --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+      "https://gitlab.deepglint.com/api/v4/projects/liuyuan%2Fleangoo-cli/repository/files/scripts%2Finstall.sh/raw?ref={{.Tag}}" \
+      | bash -s -- {{.Tag}}
+    ```
+
+# 自建 GitLab
+gitlab_urls:
+  api: https://gitlab.deepglint.com/api/v4/
+  download: https://gitlab.deepglint.com
