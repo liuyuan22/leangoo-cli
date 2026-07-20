@@ -63,18 +63,24 @@ leangoo story get 'https://www.lg.team/kanban/board/go/<board_uuid>/<task_uuid>'
 
 1. 日常安装用仓库根目录 `.env`（不进 git）。  
    **CI 发版**另需在 GitLab **Settings → CI/CD → Variables** 配同名 `GITLAB_TOKEN`（Masked；本地 `.env` 不会进流水线）。
-2. 推送代码到 `main` 后打 tag：
+2. CI 镜像须走公司库（runner 拉不到 Docker Hub），当前使用已有镜像：  
+   `dockerhub.deepglint.com/ci/golang:1.25.3-8`  
+   若需新镜像，本地拉取后改名推送，例如：
+   ```bash
+   docker pull golang:1.25.3
+   docker tag golang:1.25.3 dockerhub.deepglint.com/ci/golang:1.25.3
+   docker login dockerhub.deepglint.com
+   docker push dockerhub.deepglint.com/ci/golang:1.25.3
+   ```
+3. 推送代码后打 tag（或本地发版）：
 
 ```bash
-git remote add origin git@gitlab.deepglint.com:liuyuan/leangoo-cli.git   # 若尚未添加
-git add -A && git commit -m "..." && git push -u origin main
-
-git tag v0.1.0
-git push origin v0.1.0
+git push -u origin main
+git tag v0.1.1 && git push origin v0.1.1
+# 或本地：bash scripts/release.sh v0.1.1
 ```
 
-3. CI 跑 GoReleaser，产物挂到  
-   https://gitlab.deepglint.com/liuyuan/leangoo-cli/-/releases
+4. 产物：https://gitlab.deepglint.com/liuyuan/leangoo-cli/-/releases
 
 ## Agent Skills
 
