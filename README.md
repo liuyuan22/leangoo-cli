@@ -3,24 +3,17 @@
 Leangoo（领歌）在线版命令行工具。通过网页接口登录并读取企业 / 项目 / Sprint / Story。
 
 > 非官方接口，页面改版可能失效。仅支持 `lg.team` 在线版。  
-> 仓库：https://gitlab.deepglint.com/liuyuan/leangoo-cli
+> 仓库：https://github.com/liuyuan22/leangoo-cli
 
-## 安装（推荐）
-
-Token **只放本地 `.env`**（已 gitignore，勿提交）。仓库根目录：
+## 安装
 
 ```bash
-cp .env.example .env   # 填入 GITLAB_TOKEN=...
-bash scripts/install.sh          # 最新版
-bash scripts/install.sh v0.1.0   # 指定版本
+curl -fsSL https://raw.githubusercontent.com/liuyuan22/leangoo-cli/main/scripts/install.sh | bash
+# 指定版本
+curl -fsSL https://raw.githubusercontent.com/liuyuan22/leangoo-cli/main/scripts/install.sh | bash -s -- v0.1.0
 ```
 
-`install.sh` 会自动读：当前目录 / 仓库根 / `~/.leangoo-cli/.env`。
-
-默认安装到 `~/.local/bin/leangoo`，并把 Skills 拷到：
-
-- `~/.cursor/skills/leangoo-*`
-- `~/.claude/skills/leangoo-*`
+默认安装到 `~/.local/bin/leangoo`，并把 Skills 拷到 `~/.cursor/skills` 与 `~/.claude/skills`。
 
 ### 卸载
 
@@ -61,26 +54,19 @@ leangoo story get 'https://www.lg.team/kanban/board/go/<board_uuid>/<task_uuid>'
 
 ## 发版（维护者）
 
-1. 日常安装用仓库根目录 `.env`（不进 git）。  
-   **CI 发版**另需在 GitLab **Settings → CI/CD → Variables** 配同名 `GITLAB_TOKEN`（Masked；本地 `.env` 不会进流水线）。
-2. CI 镜像须走公司库（runner 拉不到 Docker Hub），当前使用已有镜像：  
-   `dockerhub.deepglint.com/ci/golang:1.25.3-8`  
-   若需新镜像，本地拉取后改名推送，例如：
-   ```bash
-   docker pull golang:1.25.3
-   docker tag golang:1.25.3 dockerhub.deepglint.com/ci/golang:1.25.3
-   docker login dockerhub.deepglint.com
-   docker push dockerhub.deepglint.com/ci/golang:1.25.3
-   ```
-3. 推送代码后打 tag（或本地发版）：
+本地 **一行命令**（构建 + tag + push + GitHub Release 附件）：
 
 ```bash
-git push -u origin main
-git tag v0.1.1 && git push origin v0.1.1
-# 或本地：bash scripts/release.sh v0.1.1
+# 先登录 GitHub CLI（只需一次）
+brew install gh && gh auth login
+
+# 发版
+bash scripts/release.sh v0.1.0
 ```
 
-4. 产物：https://gitlab.deepglint.com/liuyuan/leangoo-cli/-/releases
+也可把 `GITHUB_TOKEN`（`contents:write`）写进本地 `.env`，不装 `gh` 也能发。
+
+产物页：https://github.com/liuyuan22/leangoo-cli/releases
 
 ## Agent Skills
 
@@ -91,7 +77,7 @@ skills/
 └── leangoo-story/
 ```
 
-也可：`npx skills add git@gitlab.deepglint.com:liuyuan/leangoo-cli.git -g -y`
+也可：`npx skills add https://github.com/liuyuan22/leangoo-cli.git -g -y`
 
 ## 命令一览
 
