@@ -23,29 +23,41 @@ which leangoo || ./bin/leangoo version
 ```bash
 # 在本仓库
 go build -o bin/leangoo ./cmd/leangoo
-# 建议加入 PATH
-cp bin/leangoo /usr/local/bin/leangoo
+# 或官方安装
+curl -fsSL https://raw.githubusercontent.com/liuyuan22/leangoo-cli/main/scripts/install.sh | bash
 ```
 
 Agent 调用时优先用 PATH 中的 `leangoo`；若仅有仓库产物，用绝对路径或 `./bin/leangoo`。
 
-## 认证
+## 认证（每次操作前）
 
 会话文件：`~/.leangoo-cli/session.json`（Cookie + 当前企业，**不含明文密码**）。
 
+**Agent 硬性步骤：** 调用任何 `ent` / `project` / `sprint` / `story` 命令前，先执行：
+
 ```bash
-leangoo auth status          # 是否已登录
+leangoo auth status
+```
+
+| 结果 | 做法 |
+|------|------|
+| `logged_in: true` | 继续业务命令 |
+| `logged_in: false` 或命令报「未登录」 | **立刻停下来**，明确告诉用户：请在本机终端运行 `leangoo auth login`，登录后再说「继续」；不要假装已查到数据，也不要在 Agent 里交互输入密码 |
+
+```bash
+leangoo auth status          # 是否已登录（未登录会带 hint）
 leangoo auth logout          # 清除本地会话
 ```
 
-### 登录（Agent 注意）
+### 登录方式
 
-交互式 `leangoo auth login` 会提示手机号 / 方式 / 密码，**不适合在非交互 Agent 环境阻塞等待**。
+交互式（推荐，给用户自己跑）：
 
-Agent 应：
+```bash
+leangoo auth login
+```
 
-1. 先跑 `leangoo auth status`
-2. 若未登录：告诉用户在终端执行 `leangoo auth login`（交互），或请用户提供后用非交互参数代为执行：
+非交互（仅当用户主动提供凭证时）：
 
 ```bash
 leangoo auth login --phone <账号> --password '<密码>'
@@ -53,7 +65,7 @@ leangoo auth send-code --phone <手机号>
 leangoo auth login --phone <手机号> --code <验证码>
 ```
 
-3. **不要**把用户密码写入仓库、日志或 skill 文件；命令行历史也有泄露风险，优先让用户本地交互登录。
+**不要**把密码写入仓库、日志或 skill 文件。
 
 ## 输出约定
 

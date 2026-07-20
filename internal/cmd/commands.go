@@ -219,7 +219,12 @@ func authStatusCmd() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			s, err := session.Load()
 			if err != nil {
-				_ = output.Print(map[string]any{"logged_in": false, "error": err.Error()})
+				_ = output.Print(map[string]any{
+					"logged_in": false,
+					"error":     err.Error(),
+					"hint":      "请在本机终端执行: leangoo auth login",
+				})
+				os.Exit(1)
 				return
 			}
 			_ = output.Print(map[string]any{
