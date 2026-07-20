@@ -54,19 +54,21 @@ leangoo story get 'https://www.lg.team/kanban/board/go/<board_uuid>/<task_uuid>'
 
 ## 发版（维护者）
 
-本地 **一行命令**（构建 + tag + push + GitHub Release 附件）：
+本地打 tag 并推送，**GitHub Actions 自动打包发版**：
 
 ```bash
-# 先登录 GitHub CLI（只需一次）
-brew install gh && gh auth login
-
-# 发版
 bash scripts/release.sh v0.1.0
 ```
 
-也可把 `GITHUB_TOKEN`（`contents:write`）写进本地 `.env`，不装 `gh` 也能发。
+等价于：
 
-产物页：https://github.com/liuyuan22/leangoo-cli/releases
+```bash
+git tag -a v0.1.0 -m "Release v0.1.0"
+git push origin v0.1.0
+```
+
+无需 token / 公司镜像。跑完后在 Releases 下载：  
+https://github.com/liuyuan22/leangoo-cli/releases
 
 ## Agent Skills
 
