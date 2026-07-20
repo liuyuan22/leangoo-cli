@@ -92,14 +92,21 @@ done
 
 echo "==> git tag ${VERSION}"
 if git rev-parse "$VERSION" >/dev/null 2>&1; then
-  echo "  tag 已存在，跳过创建"
+  if [[ "$(git rev-parse "${VERSION}^{commit}")" == "$(git rev-parse HEAD)" ]]; then
+    echo "  tag 已指向当前 commit"
+  else
+    echo "  tag 指向旧 commit，移动到 HEAD"
+    git tag -d "$VERSION"
+    git tag -a "$VERSION" -m "Release ${VERSION}"
+  fi
 else
   git tag -a "$VERSION" -m "Release ${VERSION}"
 fi
 
 echo "==> 推送 main + ${VERSION}"
 git push origin HEAD:main
-git push origin "$VERSION"
+# 若远端已有同名旧 tag，用 --force 对齐到本次发版 commit
+git push origin "refs/tags/${VERSION}" --force
 
 notes="$(cat <<EOF
 ## leangoo ${VERSION}
