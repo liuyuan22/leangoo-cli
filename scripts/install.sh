@@ -1,13 +1,21 @@
 #!/usr/bin/env bash
 # 安装 leangoo CLI + Agent Skills（内网 GitLab Releases）
 #
-# 用法：
-#   export GITLAB_TOKEN=glpat-xxxx          # 私有仓库只读/api 即可
+# 用法（推荐：在仓库根目录维护 .env，勿提交）：
+#   cp .env.example .env   # 填入 GITLAB_TOKEN
+#   bash scripts/install.sh
+#   bash scripts/install.sh v0.1.0
+#
+# 无本地仓库时也可：
+#   set -a && source /path/to/leangoo-cli/.env && set +a
 #   curl -fsSL --header "PRIVATE-TOKEN: $GITLAB_TOKEN" \
 #     "https://gitlab.deepglint.com/api/v4/projects/liuyuan%2Fleangoo-cli/repository/files/scripts%2Finstall.sh/raw?ref=main" \
 #     | bash
-#   # 或指定版本：
-#   ... | bash -s -- v0.1.0
+#
+# Token 加载顺序（已有环境变量优先）：
+#   1) 当前目录 .env
+#   2) 仓库根目录 .env（相对本脚本）
+#   3) ~/.leangoo-cli/.env
 #
 # 环境变量：
 #   GITLAB_TOKEN / PRIVATE_TOKEN  访问私有 Release（必填，除非仓库公开）
@@ -17,6 +25,24 @@
 #   INSTALL_SKILLS                默认 1（安装到 ~/.cursor/skills 与 ~/.claude/skills）
 
 set -euo pipefail
+
+_load_env_file() {
+  local f="$1"
+  [[ -f "$f" ]] || return 1
+  set -a
+  # shellcheck disable=SC1090
+  source "$f"
+  set +a
+  return 0
+}
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
+if [[ -z "${GITLAB_TOKEN:-${PRIVATE_TOKEN:-}}" ]]; then
+  _load_env_file "${PWD}/.env" \
+    || { [[ -n "${SCRIPT_DIR}" ]] && _load_env_file "${SCRIPT_DIR}/../.env"; } \
+    || _load_env_file "${HOME}/.leangoo-cli/.env" \
+    || true
+fi
 
 GITLAB_HOST="${GITLAB_HOST:-gitlab.deepglint.com}"
 GITLAB_PROJECT="${GITLAB_PROJECT:-liuyuan/leangoo-cli}"
