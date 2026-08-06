@@ -1,97 +1,96 @@
 ---
 name: leangoo-sprint
 description: >-
-  用 leangoo CLI 列出/切换企业、列出项目、列出 Sprint（看板）、查看泳道与列结构。
-  支持用户粘贴的 lg.team 看板链接（/kanban/board/go/{board_uuid}）。
-  用户提到领歌项目、Sprint、看板清单、泳道、列、board_uuid、看板链接、切换企业时使用。
-  依赖 leangoo-shared 的登录与会话。
+  用 leangoo CLI 管理企业/项目/Sprint（看板）：列表与结构、状态/周期/重命名/可见性/收藏、
+  看板动态与导出、列与泳道增删改复制排序移动、回收站列表与恢复。
+  支持 lg.team 看板链接（/kanban/board/go/{board_uuid}）。
+  用户提到领歌项目、Sprint、看板、泳道、列、回收站、看板状态、导出时使用。
+  卡片操作见 leangoo-story；登录见 leangoo-shared。
 ---
 
-# leangoo Sprint / 项目 / 企业
+# leangoo Sprint / 项目 / 企业 / 列泳道 / 回收站
 
-概念对应：
-
-| 用户说法 | CLI / 数据 |
-|----------|------------|
+| 用户说法 | CLI |
+|----------|-----|
 | 企业 | `ent`（团队版 id=`-1`） |
 | 项目 | `project` |
-| Sprint / 看板 | `sprint`（别名 `board`），标识常用 `board_uuid` |
+| Sprint / 看板 | `sprint` |
+| 列 | `list` |
+| 泳道 | `lane` |
+| 回收站 | `recycle` |
 
-## 用户粘贴看板链接时
+## 链接
 
 ```bash
-# 仅 Sprint（可带 #/board_view）
-leangoo sprint get 'https://www.lg.team/kanban/board/go/1f17691e-2963-6670-8314-0242ac140003#/board_view'
-leangoo story list --sprint 'https://www.lg.team/kanban/board/go/1f17691e-2963-6670-8314-0242ac140003#/board_view'
+leangoo sprint get 'https://www.lg.team/kanban/board/go/<board_uuid>#/board_view'
 ```
 
-若链接还带 `/{task_uuid}`，改用 `leangoo-story` 的 `story get '<完整URL>'`。
+带 `/{task_uuid}` 时改用 `leangoo-story` 的 `story get '<完整URL>'`。
 
 ## 前置
 
 ```bash
-leangoo auth status
-# 未登录 → 按 leangoo-shared 引导登录
+leangoo auth status   # 未登录 → leangoo-shared
 ```
 
-## 企业
+## 企业 / 项目 / Sprint 读
 
 ```bash
 leangoo ent list
-leangoo ent use 15599          # 或名称片段、或 -1 / 团队版
-```
-
-切换后后续 `project` / `sprint` / `story` 都基于当前企业。
-
-## 项目
-
-```bash
+leangoo ent use 15599                 # 或名称；团队版：leangoo ent use -- -1
 leangoo project list
-```
-
-从 JSON 中取 `project_id`（或返回结构里的等价 id 字段）供 Sprint 查询。
-
-## Sprint（看板）
-
-```bash
 leangoo sprint list --project <project_id>
-leangoo sprint get <board_uuid|board_url>    # 泳道行数、列数、名称
+leangoo sprint get <board_uuid|url>   # structure: lane_*/list_*
 ```
 
-`sprint get` 的 `structure`：
-
-- `lane_count` / `lane_names`：泳道（行）
-- `list_count` / `list_names`：列
-
-## 看板写操作
+## Sprint 写
 
 ```bash
 leangoo sprint set-status <board|url> --status unset|pending|ongoing|finished
-leangoo sprint set-period <board|url> --begin 2026-08-01 --end 2026-08-14
+leangoo sprint set-period <board|url> --begin YYYY-MM-DD --end YYYY-MM-DD
 leangoo sprint rename <board|url> --name 'Sprint 2'
-
-# 列 / 泳道
-leangoo list add --sprint <board> --name 'review'
-leangoo list rename --sprint <board> --list todo --name '待办'
-leangoo list set-done --sprint <board> --list done --done=true
-leangoo list delete --sprint <board> --list <id|名> --yes
-leangoo lane add --sprint <board> --name '泳道A'
-leangoo lane delete --sprint <board> --lane <id|名> --yes
-leangoo list copy <list> --sprint <board> --yes
-leangoo lane copy <lane> --sprint <board> --yes
-
-# 收藏 / 动态 / 导出 / 回收站
-leangoo sprint star <board>
-leangoo sprint star <board> --unstar
-leangoo sprint activity <board>
-leangoo sprint export-excel <board>
-leangoo recycle list --sprint <board>
-leangoo recycle restore-task <task_id> --sprint <board> --list todo --yes
+leangoo sprint set-visibility <board|url> --visibility <int>   # 页面 data-limit
+leangoo sprint star <board|url>
+leangoo sprint star <board|url> --unstar
+leangoo sprint activity <board|url> [--last-id <id>]
+leangoo sprint export-excel <board|url>    # 返回需登录 Cookie 打开的 URL
+leangoo sprint export-word <board|url> [--with-attachment]
 ```
+
+## 列 `list`
+
+```bash
+leangoo list add --sprint <board> --name 'review'
+leangoo list rename <list_id|名> --sprint <board> --name '待办'
+leangoo list set-done <list_id|名> --sprint <board> --done=true|false
+leangoo list reorder <list_id|名> --sprint <board> --order <n>
+leangoo list copy <list_id|名> --sprint <board> [--to-sprint <board>] --yes
+leangoo list delete <list_id|名> --sprint <board> --yes
+```
+
+## 泳道 `lane`
+
+```bash
+leangoo lane add --sprint <board> --name '泳道A'
+leangoo lane copy <lane_id|名> --sprint <board> [--to-sprint <board>] --yes
+leangoo lane move <lane_id|名> --sprint <board> --to-sprint <board> --yes
+leangoo lane delete <lane_id|名> --sprint <board> --yes
+```
+
+## 回收站 `recycle`
+
+```bash
+leangoo recycle list --sprint <board> [--last-id <id>]
+leangoo recycle restore-task <task_id> --sprint <board> --list <列> --yes
+leangoo recycle restore-list <list_id> --sprint <board> --yes
+leangoo recycle restore-lane <lane_id> --sprint <board> --yes
+```
+
+回收站列表来自删除类看板动态；恢复卡片必须指定目标列。
 
 ## Agent 工作流
 
-1. 用户给了看板链接 → 直接 `sprint get` / `story list --sprint '<URL>'`
+1. 有看板链接 → `sprint get` / `story list --sprint '<URL>'`
 2. 否则：`ent list` → `ent use` → `project list` → `sprint list`
-3. 卡片交给 `leangoo-story`
-4. 改看板状态/周期/列泳道用本 skill 的写命令；删除需 `--yes`
+3. 卡片 → `leangoo-story`
+4. 删/复制/移动/恢复必须 `--yes`

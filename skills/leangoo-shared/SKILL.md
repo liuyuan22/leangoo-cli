@@ -2,8 +2,8 @@
 name: leangoo-shared
 description: >-
   Leangoo（领歌）CLI 共享规则：安装 leangoo 二进制、auth 登录/退出/状态、会话目录、
-  企业切换前提、JSON 输出约定。在用户提到领歌、lg.team、Leangoo、看板登录，
-  或执行任何 leangoo 命令前未登录/会话过期时使用。
+  企业切换前提、JSON 输出约定、顶层命令索引。在用户提到领歌、lg.team、Leangoo、看板登录，
+  或执行任何 leangoo 命令前未登录/会话过期时使用。写操作（建卡、改卡、列泳道等）也依赖本 skill 的登录检查。
 ---
 
 # leangoo-cli 共享规则
@@ -12,8 +12,6 @@ description: >-
 
 ## 安装与可用性
 
-优先确认二进制可用：
-
 ```bash
 which leangoo || ./bin/leangoo version
 ```
@@ -21,19 +19,18 @@ which leangoo || ./bin/leangoo version
 若没有：
 
 ```bash
-# 在本仓库
 go build -o bin/leangoo ./cmd/leangoo
-# 或官方安装
+# 或
 curl -fsSL https://raw.githubusercontent.com/liuyuan22/leangoo-cli/main/scripts/install.sh | bash
 ```
 
-Agent 调用时优先用 PATH 中的 `leangoo`；若仅有仓库产物，用绝对路径或 `./bin/leangoo`。
+Agent 优先用 PATH 中的 `leangoo`；仅有仓库产物时用绝对路径或 `./bin/leangoo`。
 
 ## 认证（每次操作前）
 
-会话文件：`~/.leangoo-cli/session.json`（Cookie + 当前企业，**不含明文密码**）。
+会话：`~/.leangoo-cli/session.json`（Cookie + 当前企业，**不含明文密码**）。
 
-**Agent 硬性步骤：** 调用任何 `ent` / `project` / `sprint` / `story` 命令前，先执行：
+**硬性步骤：** 调用任何 `ent` / `project` / `sprint` / `story` / `list` / `lane` / `recycle` 前先：
 
 ```bash
 leangoo auth status
@@ -41,43 +38,35 @@ leangoo auth status
 
 | 结果 | 做法 |
 |------|------|
-| `logged_in: true` | 继续业务命令 |
-| `logged_in: false` 或命令报「未登录」 | **立刻停下来**，明确告诉用户：请在本机终端运行 `leangoo auth login`，登录后再说「继续」；不要假装已查到数据，也不要在 Agent 里交互输入密码 |
+| `logged_in: true` | 继续 |
+| 未登录 / 会话无效 | **立刻停下**，让用户在本机执行 `leangoo auth login`，登录后再继续；不要在 Agent 里交互输密码 |
 
 ```bash
-leangoo auth status          # 是否已登录（未登录会带 hint）
-leangoo auth logout          # 清除本地会话
-```
-
-### 登录方式
-
-交互式（推荐，给用户自己跑）：
-
-```bash
-leangoo auth login
-```
-
-非交互（仅当用户主动提供凭证时）：
-
-```bash
-leangoo auth login --phone <账号> --password '<密码>'
+leangoo auth login            # 交互（用户本机跑）
+leangoo auth logout
 leangoo auth send-code --phone <手机号>
+leangoo auth login --phone <账号> --password '<密码>'   # 仅用户主动提供时
 leangoo auth login --phone <手机号> --code <验证码>
 ```
 
-**不要**把密码写入仓库、日志或 skill 文件。
+**不要**把密码写入仓库、日志或 skill。
 
-## 输出约定
+## 输出与导航约定
 
-- 命令默认输出 **JSON**（便于解析）
-- 先选企业再查项目/Sprint/Story：`leangoo ent list` → `leangoo ent use <id>`
-- 团队版企业 id 为 `-1`，入口为 `/kanban/board_list`
+- 默认输出 **JSON**
+- 先企业再业务：`ent list` → `ent use <id|名称>` → `project` / `sprint` / `story`
+- 团队版企业 id 为 `-1`（`ent use -- -1` 或名称「团队版」）
+- 破坏性写操作（删除/移动/复制/批量等）必须加 `--yes`
+- 看板/卡片参数普遍接受 `board_uuid` 或完整 `lg.team` URL
 
-## 领域技能
+## 顶层命令索引（全量）
 
-| Skill | 用途 |
-|-------|------|
-| `leangoo-sprint` | 企业 / 项目 / Sprint（看板）列表与结构 |
-| `leangoo-story` | Story（卡片）列表与详情（描述、动态） |
+| 命令 | Skill | 用途 |
+|------|--------|------|
+| `auth` | 本 skill | 登录/退出/状态 |
+| `ent` / `project` / `sprint` | `leangoo-sprint` | 企业、项目、看板读写、动态、导出、收藏 |
+| `list` / `lane` / `recycle` | `leangoo-sprint` | 列、泳道、回收站 |
+| `story` | `leangoo-story` | 卡片读写（含附件/标签/检查项/关联/批量） |
+| `version` | — | 版本 |
 
-未登录或报会话无效时，回到本 skill 处理认证。
+不确定子命令时：先 `leangoo <cmd> --help`，再按上表打开对应 skill。
