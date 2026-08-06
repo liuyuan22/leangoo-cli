@@ -39,9 +39,9 @@ jobs:
             ### Install
 
             ```bash
-            curl -fsSL https://raw.githubusercontent.com/liuyuan22/leangoo-cli/main/scripts/install.sh | bash
+            curl -fsSL https://cdn.jsdelivr.net/gh/liuyuan22/leangoo-cli@main/scripts/install.sh | bash
             # or pin version
-            curl -fsSL https://raw.githubusercontent.com/liuyuan22/leangoo-cli/main/scripts/install.sh | bash -s -- ${{ github.ref_name }}
+            curl -fsSL https://cdn.jsdelivr.net/gh/liuyuan22/leangoo-cli@main/scripts/install.sh | bash -s -- ${{ github.ref_name }}
             ```
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

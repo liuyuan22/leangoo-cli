@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # 安装 leangoo CLI + Agent Skills（GitHub Releases，公开仓库无需 token）
 #
-#   curl -fsSL https://raw.githubusercontent.com/liuyuan22/leangoo-cli/main/scripts/install.sh | bash
+#   curl -fsSL https://cdn.jsdelivr.net/gh/liuyuan22/leangoo-cli@main/scripts/install.sh | bash
 #   curl -fsSL ... | bash -s -- v1.2.0
+#   （避免 raw.githubusercontent.com 对 main 的 CDN 缓存仍吐旧脚本）
 #
 # 或仓库内：bash scripts/install.sh [version]
 #

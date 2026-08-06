@@ -21,7 +21,7 @@ which leangoo || ./bin/leangoo version
 ```bash
 go build -o bin/leangoo ./cmd/leangoo
 # 或
-curl -fsSL https://raw.githubusercontent.com/liuyuan22/leangoo-cli/main/scripts/install.sh | bash
+curl -fsSL https://cdn.jsdelivr.net/gh/liuyuan22/leangoo-cli@main/scripts/install.sh | bash
 ```
 
 更新（覆盖当前二进制，默认同步 Skills）：

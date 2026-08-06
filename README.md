@@ -8,9 +8,9 @@ Leangoo（领歌）在线版命令行工具。通过网页接口登录并读写�
 ## 安装
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/liuyuan22/leangoo-cli/main/scripts/install.sh | bash
+curl -fsSL https://cdn.jsdelivr.net/gh/liuyuan22/leangoo-cli@main/scripts/install.sh | bash
 # 指定版本
-curl -fsSL https://raw.githubusercontent.com/liuyuan22/leangoo-cli/main/scripts/install.sh | bash -s -- v0.1.0
+curl -fsSL https://cdn.jsdelivr.net/gh/liuyuan22/leangoo-cli@main/scripts/install.sh | bash -s -- v1.2.0
 ```
 
 默认安装到 `~/.local/bin/leangoo`，并把 Skills 拷到 `~/.cursor/skills` 与 `~/.claude/skills`。
