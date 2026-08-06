@@ -13,6 +13,12 @@ curl -fsSL https://cdn.jsdelivr.net/gh/liuyuan22/leangoo-cli@main/scripts/instal
 curl -fsSL https://cdn.jsdelivr.net/gh/liuyuan22/leangoo-cli@main/scripts/install.sh | bash -s -- v1.2.0
 ```
 
+备用（GitHub raw，偶发 CDN 缓存旧脚本）：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/liuyuan22/leangoo-cli/main/scripts/install.sh | bash
+```
+
 默认安装到 `~/.local/bin/leangoo`，并把 Skills 拷到 `~/.cursor/skills` 与 `~/.claude/skills`。
 
 ### 更新

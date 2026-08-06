@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # 安装 leangoo CLI + Agent Skills（GitHub Releases，公开仓库无需 token）
 #
+# 推荐（jsDelivr，避免 raw CDN 缓存旧脚本）：
 #   curl -fsSL https://cdn.jsdelivr.net/gh/liuyuan22/leangoo-cli@main/scripts/install.sh | bash
-#   curl -fsSL ... | bash -s -- v1.2.0
-#   （避免 raw.githubusercontent.com 对 main 的 CDN 缓存仍吐旧脚本）
+#   curl -fsSL https://cdn.jsdelivr.net/gh/liuyuan22/leangoo-cli@main/scripts/install.sh | bash -s -- v1.2.0
+#
+# 备用（GitHub raw，main 分支偶发缓存滞后）：
+#   curl -fsSL https://raw.githubusercontent.com/liuyuan22/leangoo-cli/main/scripts/install.sh | bash
 #
 # 或仓库内：bash scripts/install.sh [version]
 #
@@ -167,3 +170,5 @@ case ":$PATH:" in
 esac
 
 echo "==> 完成。下一步: leangoo auth login"
+echo "    重装/分享安装命令（推荐 jsDelivr）："
+echo "    curl -fsSL https://cdn.jsdelivr.net/gh/${GITHUB_REPO}@main/scripts/install.sh | bash"
