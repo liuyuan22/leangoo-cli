@@ -9,11 +9,11 @@ Leangoo（领歌）在线版命令行工具。通过网页接口登录并读写�
 
 ```bash
 curl -fsSL https://cdn.jsdelivr.net/gh/liuyuan22/leangoo-cli@main/scripts/install.sh | bash
-# 指定版本
-curl -fsSL https://cdn.jsdelivr.net/gh/liuyuan22/leangoo-cli@main/scripts/install.sh | bash -s -- v1.2.0
 ```
 
-备用（GitHub raw，偶发 CDN 缓存旧脚本）：
+```bash
+curl -fsSL https://cdn.jsdelivr.net/gh/liuyuan22/leangoo-cli@main/scripts/install.sh | bash -s -- v1.2.0
+```
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/liuyuan22/leangoo-cli/main/scripts/install.sh | bash
