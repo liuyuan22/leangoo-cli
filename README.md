@@ -23,6 +23,8 @@ leangoo update --check      # 只检查
 leangoo update --version v1.1.0
 ```
 
+启动其它命令时会自动做轻量版本检查（约每天一次，缓存 `~/.leangoo-cli/version_check.json`）；有新版本时在 stderr 提示运行 `leangoo update`。关闭检查：`--no-update-check` 或 `LEANGOO_NO_UPDATE_CHECK=1`。
+
 旧版本若还没有 `update` 命令，先再跑一次上面的安装脚本，之后即可用 `leangoo update`。
 
 ### 卸载
@@ -66,6 +68,8 @@ leangoo story create --sprint '<看板URL>' --title '新卡片' --list todo
 leangoo story edit <task_id> --sprint '<看板URL>' --title '改标题'
 leangoo story comment <task_id> --sprint '<看板URL>' --text '进展'
 leangoo story set-dates <task_id> --sprint '<看板URL>' --due '2026-08-10 18:00'
+# 一键拆前后端（标签/点数/关联/排序）
+leangoo story split '<卡片URL>' --sprint '<看板URL>' --fe-estimate 0.5 --be-estimate 0.5 --yes
 leangoo sprint set-status '<看板URL>' --status ongoing
 ```
 

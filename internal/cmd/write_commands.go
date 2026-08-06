@@ -175,6 +175,74 @@ func addStoryWriteCommands(cmd *cobra.Command) {
 	_ = moveCmd.MarkFlagRequired("to-list")
 	cmd.AddCommand(moveCmd)
 
+	var reorderTasks []string
+	reorderCmd := &cobra.Command{
+		Use:   "reorder --sprint <board> --task <a> --task <b> [--task <c>...]",
+		Short: "调整同列单元格内卡片顺序（按 --task 先后排列）",
+		Run: func(cmd *cobra.Command, args []string) {
+			boardUUID := resolveBoardUUID(sprint)
+			c, err := client.NewFromSession()
+			if err != nil {
+				output.Fatal(err)
+			}
+			out, err := api.ReorderStories(c, boardUUID, reorderTasks)
+			if err != nil {
+				output.Fatal(err)
+			}
+			_ = output.Print(out)
+		},
+	}
+	reorderCmd.Flags().StringVar(&sprint, "sprint", "", "看板")
+	reorderCmd.Flags().StringArrayVar(&reorderTasks, "task", nil, "按期望顺序重复传入 task_id/uuid/标题")
+	_ = reorderCmd.MarkFlagRequired("sprint")
+	_ = reorderCmd.MarkFlagRequired("task")
+	cmd.AddCommand(reorderCmd)
+
+	var feEst, beEst, feTag, beTag string
+	splitCmd := &cobra.Command{
+		Use:   "split [task] --sprint <board> --yes [--fe-estimate n] [--be-estimate n]",
+		Short: "拆成前后端 Story（复制/标签/点数/清零/关联/排序一键完成）",
+		Long: `将一张产品 Story 拆成「应用前端」「应用后端」两张开发卡：
+
+  1. 确保前后端标签存在（无则创建），原卡补齐标签
+  2. 复制两份（不改标题/描述）
+  3. 各副本只保留对应标签，并设置点数
+  4. 总卡点数清 0
+  5. 侧栏关联（互相关联）总卡 ↔ 前后端
+  6. 同列排序：总 → 前端 → 后端
+
+点数优先用 --fe-estimate / --be-estimate；未传则从描述/评论解析
+「前：…（n）」「后：…（n）」这类写法。`,
+		Args: cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			requireYes(yes, "拆分前后端 Story")
+			boardUUID, key := resolveTaskAndBoard(args[0], sprint)
+			c, err := client.NewFromSession()
+			if err != nil {
+				output.Fatal(err)
+			}
+			out, err := api.SplitStoryFEBE(c, boardUUID, key, api.SplitStoryOpts{
+				FEEstimate: feEst,
+				BEEstimate: beEst,
+				FETag:      feTag,
+				BETag:      beTag,
+				ToList:     toList,
+			})
+			if err != nil {
+				output.Fatal(err)
+			}
+			_ = output.Print(out)
+		},
+	}
+	splitCmd.Flags().StringVar(&sprint, "sprint", "", "看板")
+	splitCmd.Flags().StringVar(&toList, "to-list", "", "副本目标列（默认与原卡同列）")
+	splitCmd.Flags().StringVar(&feEst, "fe-estimate", "", "前端点数（可从描述解析）")
+	splitCmd.Flags().StringVar(&beEst, "be-estimate", "", "后端点数（可从描述解析）")
+	splitCmd.Flags().StringVar(&feTag, "fe-tag", "应用前端", "前端标签名")
+	splitCmd.Flags().StringVar(&beTag, "be-tag", "应用后端", "后端标签名")
+	splitCmd.Flags().BoolVar(&yes, "yes", false, "确认拆分")
+	cmd.AddCommand(splitCmd)
+
 	commentCmd := &cobra.Command{
 		Use:   "comment [task_id|uuid|url]",
 		Short: "给 Story 添加评论",
@@ -292,9 +360,10 @@ func addStoryWriteCommands(cmd *cobra.Command) {
 	var tag, checklistUUID, itemUUID, typeID, hours string
 	var doneFlag bool
 
+	var createTag bool
 	tagAdd := &cobra.Command{
-		Use:   "tag-add [task] --tag <名称|uuid>",
-		Short: "给 Story 添加标签",
+		Use:   "tag-add [task] --tag <名称|uuid> [--create]",
+		Short: "给 Story 添加标签（--create：不存在则在看板创建）",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			boardUUID, key := resolveTaskAndBoard(args[0], sprint)
@@ -302,7 +371,7 @@ func addStoryWriteCommands(cmd *cobra.Command) {
 			if err != nil {
 				output.Fatal(err)
 			}
-			out, err := api.AddStoryTagByQuery(c, boardUUID, key, tag)
+			out, err := api.AddStoryTagByQueryOpts(c, boardUUID, key, tag, createTag)
 			if err != nil {
 				output.Fatal(err)
 			}
@@ -311,8 +380,35 @@ func addStoryWriteCommands(cmd *cobra.Command) {
 	}
 	tagAdd.Flags().StringVar(&sprint, "sprint", "", "看板")
 	tagAdd.Flags().StringVar(&tag, "tag", "", "标签名称或 uuid")
+	tagAdd.Flags().BoolVar(&createTag, "create", false, "标签不存在时自动创建看板自定义标签")
 	_ = tagAdd.MarkFlagRequired("tag")
 	cmd.AddCommand(tagAdd)
+
+	var tagColor string
+	tagEnsure := &cobra.Command{
+		Use:   "tag-ensure --sprint <board> --tag <名称> [--color #RRGGBB]",
+		Short: "确保看板上存在某标签（无则创建）",
+		Run: func(cmd *cobra.Command, args []string) {
+			boardUUID := resolveBoardUUID(sprint)
+			c, err := client.NewFromSession()
+			if err != nil {
+				output.Fatal(err)
+			}
+			// Warm NEW_LEANGOO base URL from board page when needed.
+			_, _ = api.LoadBoardContext(c, boardUUID)
+			t, err := api.EnsureBoardTagColor(c, boardUUID, tag, tagColor)
+			if err != nil {
+				output.Fatal(err)
+			}
+			_ = output.Print(map[string]any{"ok": true, "tag": t})
+		},
+	}
+	tagEnsure.Flags().StringVar(&sprint, "sprint", "", "看板")
+	tagEnsure.Flags().StringVar(&tag, "tag", "", "标签名称")
+	tagEnsure.Flags().StringVar(&tagColor, "color", "", "颜色 #RRGGBB（仅新建时优先色）")
+	_ = tagEnsure.MarkFlagRequired("tag")
+	_ = tagEnsure.MarkFlagRequired("sprint")
+	cmd.AddCommand(tagEnsure)
 
 	tagRm := &cobra.Command{
 		Use:   "tag-remove [task] --tag <名称|uuid>",

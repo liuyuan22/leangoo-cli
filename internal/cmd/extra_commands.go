@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/deepglint/leangoo-cli/internal/api"
@@ -124,8 +125,8 @@ func addStoryExtraCommands(cmd *cobra.Command) {
 	cmd.AddCommand(connList)
 
 	connAdd := &cobra.Command{
-		Use:   "connect-add [task] --url <url> [--title <标题>]",
-		Short: "添加 URL 关联",
+		Use:   "connect-add [task] (--to <task>|--url <url>) [--title <标题>]",
+		Short: "侧栏「关联」：关联另一张卡片（--to）或 URL（--url）",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			boardUUID, key := resolveTaskAndBoard(args[0], sprint)
@@ -133,7 +134,20 @@ func addStoryExtraCommands(cmd *cobra.Command) {
 			if err != nil {
 				output.Fatal(err)
 			}
-			out, err := api.AddStoryURLConnect(c, boardUUID, key, urlStr, title)
+			to := strings.TrimSpace(linkTask)
+			u := strings.TrimSpace(urlStr)
+			if to == "" && u == "" {
+				output.Fatal(fmt.Errorf("请指定 --to <卡片> 或 --url <链接>"))
+			}
+			if to != "" && u != "" {
+				output.Fatal(fmt.Errorf("--to 与 --url 不能同时使用"))
+			}
+			var out map[string]any
+			if to != "" {
+				out, err = api.AddStoryCardConnect(c, boardUUID, key, to)
+			} else {
+				out, err = api.AddStoryURLConnect(c, boardUUID, key, u, title)
+			}
 			if err != nil {
 				output.Fatal(err)
 			}
@@ -141,10 +155,35 @@ func addStoryExtraCommands(cmd *cobra.Command) {
 		},
 	}
 	connAdd.Flags().StringVar(&sprint, "sprint", "", "看板")
-	connAdd.Flags().StringVar(&urlStr, "url", "", "链接")
-	connAdd.Flags().StringVar(&title, "title", "", "标题")
-	_ = connAdd.MarkFlagRequired("url")
+	connAdd.Flags().StringVar(&linkTask, "to", "", "关联目标卡片（task_id/uuid/标题）")
+	connAdd.Flags().StringVar(&urlStr, "url", "", "关联 URL")
+	connAdd.Flags().StringVar(&title, "title", "", "URL 标题（仅 --url）")
 	cmd.AddCommand(connAdd)
+
+	var connectQ string
+	var connectType int
+	connSearch := &cobra.Command{
+		Use:   "connect-search [task] --q <关键词>",
+		Short: "搜索可关联的卡片/资源（侧栏关联搜索）",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			boardUUID, key := resolveTaskAndBoard(args[0], sprint)
+			c, err := client.NewFromSession()
+			if err != nil {
+				output.Fatal(err)
+			}
+			out, err := api.SearchConnectableResources(c, boardUUID, key, connectQ, connectType)
+			if err != nil {
+				output.Fatal(err)
+			}
+			_ = output.Print(out)
+		},
+	}
+	connSearch.Flags().StringVar(&sprint, "sprint", "", "看板")
+	connSearch.Flags().StringVar(&connectQ, "q", "", "关键词（卡片号/标题）")
+	connSearch.Flags().IntVar(&connectType, "type", 1, "资源类型（1=卡片）")
+	_ = connSearch.MarkFlagRequired("q")
+	cmd.AddCommand(connSearch)
 
 	connRm := &cobra.Command{
 		Use:   "connect-remove [task] --id <connect_id> --yes",

@@ -405,6 +405,142 @@ func MoveStory(c *client.Client, fromBoardUUID, taskKey, toBoardUUID, toList str
 	}, nil
 }
 
+// ReorderStories places the given stories in the listed relative order within their block
+// (same lane+list cell), via /task/change_order. Other cards keep relative positions;
+// the group is inserted at the earliest original index among the named cards.
+func ReorderStories(c *client.Client, boardUUID string, taskKeys []string) (map[string]any, error) {
+	if len(taskKeys) < 2 {
+		return nil, fmt.Errorf("请至少指定 2 张卡的顺序，例如 --task 总 --task 前端 --task 后端")
+	}
+	ctx, stories, err := ListStories(c, boardUUID)
+	if err != nil {
+		return nil, err
+	}
+	ordered := make([]*Story, 0, len(taskKeys))
+	seen := map[string]bool{}
+	for _, key := range taskKeys {
+		st, err := FindStory(stories, key)
+		if err != nil {
+			return nil, err
+		}
+		id := fmt.Sprint(st.TaskID)
+		if seen[id] {
+			return nil, fmt.Errorf("重复的卡片: %s", key)
+		}
+		seen[id] = true
+		ordered = append(ordered, st)
+	}
+	anchor := ordered[0]
+	blockID := fmt.Sprint(anchor.BlockID)
+	listID := fmt.Sprint(anchor.ListID)
+	laneID := fmt.Sprint(anchor.LaneID)
+	if blockID == "" || listID == "" {
+		return nil, fmt.Errorf("卡片缺少 block_id/list_id，无法排序")
+	}
+	// Ensure all targets share the same block; otherwise move them into the anchor block first.
+	for _, st := range ordered[1:] {
+		if fmt.Sprint(st.BlockID) != blockID || fmt.Sprint(st.ListID) != listID {
+			listName := listID
+			if ld, err := ResolveList(ctx, listID); err == nil {
+				listName = ld.ListName
+			}
+			if _, err := MoveStory(c, boardUUID, fmt.Sprint(st.TaskID), boardUUID, listName); err != nil {
+				return nil, fmt.Errorf("先把 %v 移到同列失败: %w", st.TaskID, err)
+			}
+		}
+	}
+	// Refresh after possible moves.
+	ctx, stories, err = ListStories(c, boardUUID)
+	if err != nil {
+		return nil, err
+	}
+	ordered = ordered[:0]
+	for _, key := range taskKeys {
+		st, err := FindStory(stories, key)
+		if err != nil {
+			return nil, err
+		}
+		ordered = append(ordered, st)
+	}
+	blockID = fmt.Sprint(ordered[0].BlockID)
+	listID = fmt.Sprint(ordered[0].ListID)
+	laneID = fmt.Sprint(ordered[0].LaneID)
+
+	var inBlock []Story
+	for _, s := range stories {
+		if fmt.Sprint(s.BlockID) == blockID && fmt.Sprint(s.ListID) == listID {
+			inBlock = append(inBlock, s)
+		}
+	}
+	if len(inBlock) == 0 {
+		return nil, fmt.Errorf("未找到 block=%s 下的卡片", blockID)
+	}
+
+	wantIDs := make([]string, 0, len(ordered))
+	wantSet := map[string]bool{}
+	for _, st := range ordered {
+		id := fmt.Sprint(st.TaskID)
+		wantIDs = append(wantIDs, id)
+		wantSet[id] = true
+	}
+	insertAt := -1
+	rest := make([]string, 0, len(inBlock))
+	for i, s := range inBlock {
+		id := fmt.Sprint(s.TaskID)
+		if wantSet[id] {
+			if insertAt < 0 {
+				insertAt = i
+			}
+			continue
+		}
+		rest = append(rest, id)
+	}
+	if insertAt < 0 {
+		insertAt = 0
+	}
+	if insertAt > len(rest) {
+		insertAt = len(rest)
+	}
+	newOrder := append([]string{}, rest[:insertAt]...)
+	newOrder = append(newOrder, wantIDs...)
+	newOrder = append(newOrder, rest[insertAt:]...)
+
+	listName := listID
+	if ld, err := ResolveList(ctx, listID); err == nil {
+		listName = ld.ListName
+	}
+
+	form := url.Values{}
+	form.Set("board_id", ctx.BoardID)
+	form.Set("list_id_to", listID)
+	form.Set("lane_id_to", laneID)
+	form.Set("list_name_to", listName)
+	form.Set("block_id_to", blockID)
+	form.Set("task_order_to", strings.Join(newOrder, ","))
+	for _, id := range wantIDs {
+		form.Add("task_ids[]", id)
+	}
+	// jQuery sometimes sends task_ids without []; also send comma form as fallback field.
+	form.Set("task_ids", strings.Join(wantIDs, ","))
+
+	api, raw, err := c.PostForm("/task/change_order", form)
+	if err := checkAPI(api, err, "调整卡片顺序"); err != nil {
+		return nil, fmt.Errorf("%w; body=%s", err, string(raw))
+	}
+	var msg any
+	_ = json.Unmarshal(api.Message, &msg)
+	return map[string]any{
+		"ok":            true,
+		"board_id":      ctx.BoardID,
+		"block_id":      blockID,
+		"list_id":       listID,
+		"lane_id":       laneID,
+		"task_order":    newOrder,
+		"reordered":     wantIDs,
+		"message":       msg,
+	}, nil
+}
+
 func AddComment(c *client.Client, boardUUID, taskKey, text string) (map[string]any, error) {
 	_, stories, err := ListStories(c, boardUUID)
 	if err != nil {

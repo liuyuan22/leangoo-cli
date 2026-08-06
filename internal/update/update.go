@@ -159,6 +159,7 @@ func Run(opts Options) (*Result, error) {
 	res.Action = "updated"
 	res.Skills = skillsInstalled
 	res.Message = fmt.Sprintf("已更新: %s → %s", displayVer(current), latest)
+	_ = saveCheckCache(checkCache{CheckedAt: time.Now(), Latest: latest, Current: latest})
 	return res, nil
 }
 

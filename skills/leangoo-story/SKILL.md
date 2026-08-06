@@ -2,7 +2,7 @@
 name: leangoo-story
 description: >-
   用 leangoo CLI 完整操作 Sprint 下 Story（卡片）：列表筛选、详情、创建/编辑/删除、
-  复制/移动/引用、评论、日期、完成勾选、点数与实际工时、卡片类型、
+  复制/移动/排序/拆前后端(split)、引用、评论、日期、完成勾选、点数与实际工时、卡片类型、
   成员/标签/检查项/附件/URL 关联/前后置依赖、批量删除与批量成员标签。
   支持 lg.team 看板与卡片链接。用户提到领歌 Story、卡片、任务、拆前后端、标签、点数、
   检查项、附件、关联、评论时使用。依赖已登录；导航见 leangoo-sprint。
@@ -48,6 +48,7 @@ leangoo story edit <task> --sprint <board> [--title ...] [--desc ...] [--estimat
 leangoo story delete <task> --sprint <board> --yes
 leangoo story copy <task> --sprint <board> --to-list <列> [--to-sprint <board>] --yes
 leangoo story move <task> --sprint <board> --to-list <列> [--to-sprint <board>] --yes
+leangoo story reorder --sprint <board> --task <总> --task <前端> --task <后端>
 leangoo story shortcut <task> --sprint <board> --to-list <列> [--to-sprint <board>] --yes
 ```
 
@@ -71,9 +72,12 @@ leangoo story set-type <task> --sprint <board> --type-id -1    # -1 常为「任
 ```bash
 leangoo story member-add <task> --sprint <board> --user me
 leangoo story member-remove <task> --sprint <board> --user <昵称|邮箱|id>
-leangoo story tag-add <task> --sprint <board> --tag <名称|uuid>
+leangoo story tag-ensure --sprint <board> --tag 应用前端   # 无则创建看板标签
+leangoo story tag-add <task> --sprint <board> --tag <名称|uuid> [--create]
 leangoo story tag-remove <task> --sprint <board> --tag <名称|uuid>
 ```
+
+`--create` / `tag-ensure`：看板上没有「应用前端」「应用后端」等标签时先创建再挂卡。
 
 ## 检查清单
 
@@ -96,11 +100,14 @@ leangoo story attach-delete <task> --sprint <board> --file-id <id> --yes
 ## 关联（两类，勿混用）
 
 ```bash
-# 侧栏「关联」——URL 资源
+# 侧栏「关联」——挂接另一张卡片或 URL（拆前后端用这个）
+leangoo story connect-add <task> --sprint <board> --to <另一张卡>
 leangoo story connect-add <task> --sprint <board> --url 'https://...' [--title '标题']
+leangoo story connect-search <task> --sprint <board> --q 16682   # 搜可关联卡片
+leangoo story connects <task> --sprint <board>
 leangoo story connect-remove <task> --sprint <board> --id <connect_id> --yes
 
-# 前后置依赖——同板两张 Story（拆卡挂接用这个）
+# 前后置依赖（甘特/依赖线，不是侧栏「关联」）
 leangoo story relate <taskA> --sprint <board> --to <taskB> --position pre|post
 leangoo story unrelate <taskA> --sprint <board> --to <taskB> --yes
 ```
@@ -123,16 +130,16 @@ leangoo story batch-tag --sprint <board> --tag 开发任务 --task <id>... [--re
 4. 勿把 `has_desc=Y` 当成已有正文；要正文用 `get`
 5. 不确定参数 → `leangoo story <子命令> --help`
 
-### 拆分前后端 Story（常见）
+### 拆分前后端 Story（常用：一条命令）
 
-原卡带「前端」「后端」等 tag，描述/评论里写了各方点数时：
+```bash
+leangoo story split '<卡片URL或task>' --sprint '<看板>' --yes
+# 点数写在描述/评论里（前：…（0.5）后：…（0.5））时可自动解析；也可显式传入：
+leangoo story split <task> --sprint <board> --fe-estimate 0.5 --be-estimate 0.5 --yes
+```
 
-1. `story copy` 两次（标题、描述、评论、成员等一并复制，**不要**再改标题/描述）
-2. 各副本只调 tag：`tag-remove` 掉不属于自己的
-3. 只改点数：`edit --estimate <n>`（**不要** `--title` / `--desc`）
-4. `relate` 把原卡与两副本挂上
-
-原则：**复制后除 tag 与 estimate 外一律不动。**
+会自动：确保/创建「应用前端」「应用后端」标签 → 复制两份 → 各留对应 tag → 改副本点数 → 总卡点数清 0 → 侧栏互相关联 → 排序「总 → 前端 → 后端」。  
+**不要**再改副本标题/描述；不要用 `relate`（那是前后置依赖）。
 
 ## 注意
 

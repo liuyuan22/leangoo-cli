@@ -165,8 +165,109 @@ func ResolveBoardTag(c *client.Client, boardUUID, query string) (*BoardTag, erro
 	return nil, fmt.Errorf("未找到标签: %s", query)
 }
 
+// CreateBoardCustomTag creates a board-level custom tag (NEW API /tags/add_custom_tag).
+func CreateBoardCustomTag(c *client.Client, boardUUID, tagName, colorValue string) (*BoardTag, error) {
+	tagName = strings.TrimSpace(tagName)
+	if tagName == "" {
+		return nil, fmt.Errorf("标签名不能为空")
+	}
+	if colorValue == "" {
+		colorValue = defaultTagColor(tagName)
+	}
+	if !strings.HasPrefix(colorValue, "#") {
+		colorValue = "#" + colorValue
+	}
+	body := map[string]any{
+		"board_uuid":  boardUUID,
+		"tag_name":    tagName,
+		"color_value": colorValue,
+	}
+	api, raw, err := c.PostJSON("/tags/add_custom_tag", body)
+	if err := checkAPI(api, err, "创建标签"); err != nil {
+		return nil, err
+	}
+	var msg map[string]any
+	_ = json.Unmarshal(api.Message, &msg)
+	if msg == nil {
+		_ = json.Unmarshal(raw, &msg)
+	}
+	tagObj, _ := msg["tag"].(map[string]any)
+	if tagObj == nil {
+		tagObj = msg
+	}
+	bt := BoardTag{
+		TagUUID:   firstString(tagObj, "tag_uuid", "tag_code"),
+		TagCode:   firstString(tagObj, "tag_code", "tag_uuid"),
+		TagName:   firstString(tagObj, "tag_name", "default_tag_name"),
+		Color:     firstString(tagObj, "color_value", "color"),
+		GroupName: firstString(tagObj, "group_name"),
+		GroupUUID: firstString(tagObj, "group_uuid"),
+	}
+	if bt.TagName == "" {
+		bt.TagName = tagName
+	}
+	if bt.Code() == "" {
+		return nil, fmt.Errorf("创建标签成功但未返回 tag_uuid: %s", string(api.Message))
+	}
+	return &bt, nil
+}
+
+func defaultTagColor(name string) string {
+	n := strings.ToLower(name)
+	switch {
+	case strings.Contains(n, "前端") || strings.Contains(n, "front"):
+		return "#00D8FE"
+	case strings.Contains(n, "后端") || strings.Contains(n, "back"):
+		return "#FF99CC"
+	default:
+		return "#009000"
+	}
+}
+
+// EnsureBoardTag resolves an existing tag or creates a custom tag with that exact name.
+func EnsureBoardTag(c *client.Client, boardUUID, tagName string) (*BoardTag, error) {
+	return EnsureBoardTagColor(c, boardUUID, tagName, "")
+}
+
+// EnsureBoardTagColor is EnsureBoardTag with an optional color for newly created tags.
+func EnsureBoardTagColor(c *client.Client, boardUUID, tagName, colorValue string) (*BoardTag, error) {
+	tagName = strings.TrimSpace(tagName)
+	if tagName == "" {
+		return nil, fmt.Errorf("标签不能为空")
+	}
+	if tags, err := ListBoardTags(c, boardUUID); err == nil {
+		for i := range tags {
+			if strings.EqualFold(tags[i].TagName, tagName) || tags[i].Code() == tagName || tags[i].TagUUID == tagName {
+				return &tags[i], nil
+			}
+		}
+	}
+	// Fallback: tags already on cards (list API may 403 on some boards).
+	if _, stories, err := ListStories(c, boardUUID); err == nil {
+		for _, st := range CollectStoryTags(stories) {
+			if strings.EqualFold(st.TagName, tagName) || st.TagUUID == tagName {
+				return &BoardTag{
+					TagUUID: st.TagUUID, TagCode: st.TagUUID, TagName: st.TagName,
+					Color: st.Color, GroupName: st.GroupName, GroupUUID: st.GroupUUID,
+				}, nil
+			}
+		}
+	}
+	return CreateBoardCustomTag(c, boardUUID, tagName, colorValue)
+}
+
 func AddStoryTagByQuery(c *client.Client, boardUUID, taskKey, tagQuery string) (map[string]any, error) {
-	tag, err := ResolveBoardTag(c, boardUUID, tagQuery)
+	return AddStoryTagByQueryOpts(c, boardUUID, taskKey, tagQuery, false)
+}
+
+func AddStoryTagByQueryOpts(c *client.Client, boardUUID, taskKey, tagQuery string, createIfMissing bool) (map[string]any, error) {
+	var tag *BoardTag
+	var err error
+	if createIfMissing {
+		tag, err = EnsureBoardTag(c, boardUUID, tagQuery)
+	} else {
+		tag, err = ResolveBoardTag(c, boardUUID, tagQuery)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -180,6 +281,9 @@ func AddStoryTagByQuery(c *client.Client, boardUUID, taskKey, tagQuery string) (
 	}
 	out["tag_name"] = tag.TagName
 	out["color"] = tag.ColorOrCode()
+	if createIfMissing {
+		out["ensured"] = true
+	}
 	return out, nil
 }
 

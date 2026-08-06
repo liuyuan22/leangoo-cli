@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/deepglint/leangoo-cli/internal/client"
@@ -144,6 +145,25 @@ func DeleteStoryAttachment(c *client.Client, boardUUID, taskKey, fileID string) 
 	return map[string]any{"task_id": st.TaskID, "file_id": fileID, "deleted": true, "message": payload}, nil
 }
 
+func connectBaseBody(c *client.Client, ctx *BoardContext, taskID any) map[string]any {
+	boardID, _ := strconv.ParseInt(ctx.BoardID, 10, 64)
+	var entID any = 0
+	if c.Session != nil && c.Session.CurrentEnt != nil {
+		entID = c.Session.CurrentEnt.ID
+	}
+	return map[string]any{
+		"card":    []any{},
+		"board":   []any{},
+		"mindmap": []any{},
+		"project": []any{},
+		"file":    []any{},
+		"folder":  "",
+		"ent_id":  entID,
+		"board_id": boardID,
+		"task_id":  fmt.Sprint(taskID),
+	}
+}
+
 // AddStoryURLConnect adds a URL-type connection on the card sidebar「关联」.
 func AddStoryURLConnect(c *client.Client, boardUUID, taskKey, linkURL, title string) (map[string]any, error) {
 	linkURL = strings.TrimSpace(linkURL)
@@ -161,18 +181,10 @@ func AddStoryURLConnect(c *client.Client, boardUUID, taskKey, linkURL, title str
 	if err != nil {
 		return nil, err
 	}
-	entID := ""
-	if c.Session != nil && c.Session.CurrentEnt != nil {
-		entID = fmt.Sprint(c.Session.CurrentEnt.ID)
-	}
-	body := map[string]any{
-		"board_id": ctx.BoardID,
-		"task_id":  fmt.Sprint(st.TaskID),
-		"ent_id":   entID,
-		"link": map[string]any{
-			"url":   linkURL,
-			"title": title,
-		},
+	body := connectBaseBody(c, ctx, st.TaskID)
+	body["link"] = map[string]any{
+		"url":   linkURL,
+		"title": title,
 	}
 	api, _, err := c.PostJSONKanban("/task_conn/add_connect", body)
 	if err := checkAPI(api, err, "添加关联"); err != nil {
@@ -181,6 +193,147 @@ func AddStoryURLConnect(c *client.Client, boardUUID, taskKey, linkURL, title str
 	var msg any
 	_ = json.Unmarshal(api.Message, &msg)
 	return map[string]any{"task_id": st.TaskID, "url": linkURL, "message": msg}, nil
+}
+
+// AddStoryCardConnect links another card via sidebar「关联」(task_conn/add_connect).
+func AddStoryCardConnect(c *client.Client, boardUUID, taskKey, linkTaskKey string) (map[string]any, error) {
+	ctx, stories, err := ListStories(c, boardUUID)
+	if err != nil {
+		return nil, err
+	}
+	st, err := FindStory(stories, taskKey)
+	if err != nil {
+		return nil, err
+	}
+	link, err := FindStory(stories, linkTaskKey)
+	if err != nil {
+		return nil, fmt.Errorf("关联目标: %w", err)
+	}
+	body := connectBaseBody(c, ctx, st.TaskID)
+	body["card"] = []map[string]any{{
+		"to_task_id":  fmt.Sprint(link.TaskID),
+		"task_name":   link.TaskName,
+		"to_board_id": ctx.BoardID,
+	}}
+	api, _, err := c.PostJSONKanban("/task_conn/add_connect", body)
+	if err := checkAPI(api, err, "添加卡片关联"); err != nil {
+		// already linked is OK — still try interconnect
+		if api == nil || !strings.Contains(api.MessageString(), "已关联") {
+			return nil, err
+		}
+	}
+	var msg any
+	if api != nil {
+		_ = json.Unmarshal(api.Message, &msg)
+	}
+	out := map[string]any{
+		"task_id":     st.TaskID,
+		"to_task_id":  link.TaskID,
+		"to_board_id": ctx.BoardID,
+		"message":     msg,
+	}
+	// Make association visible on both cards (侧栏「互相关联」).
+	if connectID, ierr := findCardConnectID(c, boardUUID, fmt.Sprint(st.TaskID), fmt.Sprint(link.TaskID)); ierr == nil && connectID != "" {
+		if inter, ierr := InterconnectStoryConnect(c, boardUUID, connectID); ierr == nil {
+			out["interconnected"] = true
+			out["connect_id"] = connectID
+			out["interconnect"] = inter
+		} else {
+			out["interconnected"] = false
+			out["interconnect_error"] = ierr.Error()
+			out["connect_id"] = connectID
+		}
+	}
+	return out, nil
+}
+
+func findCardConnectID(c *client.Client, boardUUID, fromTaskID, toTaskID string) (string, error) {
+	listed, err := ListStoryConnects(c, boardUUID, fromTaskID)
+	if err != nil {
+		return "", err
+	}
+	raw, _ := listed["connects"]
+	arr, _ := raw.([]any)
+	if arr == nil {
+		// message may already be typed via json.Unmarshal into []any through re-marshal
+		b, _ := json.Marshal(raw)
+		_ = json.Unmarshal(b, &arr)
+	}
+	for _, item := range arr {
+		m, _ := item.(map[string]any)
+		if m == nil {
+			continue
+		}
+		if fmt.Sprint(m["to_task_id"]) == toTaskID || fmt.Sprint(m["task_id"]) == toTaskID {
+			if id := firstString(m, "id"); id != "" {
+				return id, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("未找到关联记录 %s -> %s", fromTaskID, toTaskID)
+}
+
+// InterconnectStoryConnect enables bidirectional sidebar association for an existing connect id.
+func InterconnectStoryConnect(c *client.Client, boardUUID, connectID string) (map[string]any, error) {
+	connectID = strings.TrimSpace(connectID)
+	if connectID == "" {
+		return nil, fmt.Errorf("connect id 不能为空")
+	}
+	ctx, err := LoadBoardContext(c, boardUUID)
+	if err != nil {
+		return nil, err
+	}
+	form := url.Values{}
+	form.Set("board_id", ctx.BoardID)
+	form.Set("id", connectID)
+	api, _, err := c.PostForm("/task_conn/interconnect", form)
+	if err := checkAPI(api, err, "互相关联"); err != nil {
+		return nil, err
+	}
+	var msg any
+	_ = json.Unmarshal(api.Message, &msg)
+	return map[string]any{"id": connectID, "board_id": ctx.BoardID, "message": msg}, nil
+}
+
+// SearchConnectableResources searches cards/resources for sidebar「关联」.
+func SearchConnectableResources(c *client.Client, boardUUID, taskKey, keywords string, typ int) (map[string]any, error) {
+	keywords = strings.TrimSpace(keywords)
+	if keywords == "" {
+		return nil, fmt.Errorf("--q 不能为空")
+	}
+	if typ <= 0 {
+		typ = 1 // card
+	}
+	ctx, stories, err := ListStories(c, boardUUID)
+	if err != nil {
+		return nil, err
+	}
+	st, err := FindStory(stories, taskKey)
+	if err != nil {
+		return nil, err
+	}
+	entID := "0"
+	if c.Session != nil && c.Session.CurrentEnt != nil {
+		entID = fmt.Sprint(c.Session.CurrentEnt.ID)
+	}
+	q := url.Values{}
+	q.Set("ent_id", entID)
+	q.Set("board_id", ctx.BoardID)
+	q.Set("task_id", fmt.Sprint(st.TaskID))
+	q.Set("type", strconv.Itoa(typ))
+	q.Set("keywords", keywords)
+	api, _, err := c.Get("/task_conn/get_connectable_resources", q)
+	if err := checkAPI(api, err, "搜索可关联资源"); err != nil {
+		return nil, err
+	}
+	var msg any
+	_ = json.Unmarshal(api.Message, &msg)
+	return map[string]any{
+		"task_id":  st.TaskID,
+		"keywords": keywords,
+		"type":     typ,
+		"results":  msg,
+	}, nil
 }
 
 func ListStoryConnects(c *client.Client, boardUUID, taskKey string) (map[string]any, error) {

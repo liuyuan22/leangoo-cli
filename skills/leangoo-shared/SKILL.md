@@ -32,6 +32,8 @@ leangoo update --check
 leangoo update --version v1.1.0
 ```
 
+CLI 启动时会偶尔检查 GitHub 是否有新版本（约每天一次，结果缓存于 `~/.leangoo-cli/version_check.json`），有更新时在 stderr 提示 `leangoo update`。可用 `--no-update-check` 或环境变量 `LEANGOO_NO_UPDATE_CHECK=1` 关闭。
+
 若当前二进制还没有 `update` 子命令，先再跑一次安装脚本。
 
 Agent 优先用 PATH 中的 `leangoo`；仅有仓库产物时用绝对路径或 `./bin/leangoo`。

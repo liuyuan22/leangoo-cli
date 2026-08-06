@@ -2,6 +2,7 @@ package client
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/deepglint/leangoo-cli/internal/config"
@@ -20,6 +22,9 @@ type Client struct {
 	BaseURL string
 	Jar     http.CookieJar
 	Session *session.Session
+
+	sidOnce sync.Once
+	sid     string
 }
 
 type APIResponse struct {
@@ -99,15 +104,37 @@ func (c *Client) URL(path string) string {
 	return strings.TrimRight(c.BaseURL, "/") + path
 }
 
+// SID returns a stable per-process browser-like sid header (UUID).
+func (c *Client) SID() string {
+	c.sidOnce.Do(func() {
+		c.sid = newSID()
+	})
+	return c.sid
+}
+
+func (c *Client) setCommonHeaders(req *http.Request) {
+	req.Header.Set("Accept", "application/json, text/javascript, */*; q=0.01")
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.Header.Set("User-Agent", "leangoo-cli/1.0")
+	req.Header.Set("sid", c.SID())
+	req.Header.Set("Origin", "https://www.lg.team")
+}
+
+func newSID() string {
+	var b [16]byte
+	_, _ = rand.Read(b[:])
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+}
+
 func (c *Client) PostForm(path string, form url.Values) (*APIResponse, []byte, error) {
 	req, err := http.NewRequest(http.MethodPost, c.URL(path), strings.NewReader(form.Encode()))
 	if err != nil {
 		return nil, nil, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
-	req.Header.Set("Accept", "application/json, text/javascript, */*; q=0.01")
-	req.Header.Set("X-Requested-With", "XMLHttpRequest")
-	req.Header.Set("User-Agent", "leangoo-cli/1.0")
+	c.setCommonHeaders(req)
 	return c.doJSON(req)
 }
 
@@ -118,9 +145,7 @@ func (c *Client) PostFormRaw(path string, form url.Values) ([]byte, error) {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
-	req.Header.Set("Accept", "application/json, text/javascript, */*; q=0.01")
-	req.Header.Set("X-Requested-With", "XMLHttpRequest")
-	req.Header.Set("User-Agent", "leangoo-cli/1.0")
+	c.setCommonHeaders(req)
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return nil, err
@@ -146,9 +171,7 @@ func (c *Client) GetRaw(path string, query url.Values) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Accept", "application/json, text/javascript, */*; q=0.01")
-	req.Header.Set("X-Requested-With", "XMLHttpRequest")
-	req.Header.Set("User-Agent", "leangoo-cli/1.0")
+	c.setCommonHeaders(req)
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return nil, err
@@ -190,9 +213,7 @@ func (c *Client) PostMultipart(path string, fields map[string]string, fileField,
 		return nil, nil, err
 	}
 	req.Header.Set("Content-Type", w.FormDataContentType())
-	req.Header.Set("Accept", "application/json, text/javascript, */*; q=0.01")
-	req.Header.Set("X-Requested-With", "XMLHttpRequest")
-	req.Header.Set("User-Agent", "leangoo-cli/1.0")
+	c.setCommonHeaders(req)
 	return c.doJSON(req)
 }
 
@@ -205,9 +226,7 @@ func (c *Client) Get(path string, query url.Values) (*APIResponse, []byte, error
 	if err != nil {
 		return nil, nil, err
 	}
-	req.Header.Set("Accept", "application/json, text/javascript, */*; q=0.01")
-	req.Header.Set("X-Requested-With", "XMLHttpRequest")
-	req.Header.Set("User-Agent", "leangoo-cli/1.0")
+	c.setCommonHeaders(req)
 	return c.doJSON(req)
 }
 
@@ -322,9 +341,7 @@ func (c *Client) GetNewJSON(path string, query url.Values) (*APIResponse, []byte
 	if err != nil {
 		return nil, nil, err
 	}
-	req.Header.Set("Accept", "application/json, text/javascript, */*; q=0.01")
-	req.Header.Set("X-Requested-With", "XMLHttpRequest")
-	req.Header.Set("User-Agent", "leangoo-cli/1.0")
+	c.setCommonHeaders(req)
 	return c.doJSON(req)
 }
 
@@ -352,9 +369,7 @@ func (c *Client) doJSONBody(method, path string, body any, newAPI bool) (*APIRes
 		return nil, nil, err
 	}
 	req.Header.Set("Content-Type", "application/json;charset=UTF-8")
-	req.Header.Set("Accept", "application/json, text/javascript, */*; q=0.01")
-	req.Header.Set("X-Requested-With", "XMLHttpRequest")
-	req.Header.Set("User-Agent", "leangoo-cli/1.0")
+	c.setCommonHeaders(req)
 	return c.doJSON(req)
 }
 
