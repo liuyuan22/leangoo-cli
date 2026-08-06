@@ -15,14 +15,28 @@ import (
 type BoardContext struct {
 	BoardUUID   string          `json:"board_uuid"`
 	BoardID     string          `json:"board_id"`
+	BoardName   string          `json:"board_name,omitempty"`
 	BoardData   json.RawMessage `json:"board_data,omitempty"`
 	GBoard      json.RawMessage `json:"g_board,omitempty"`
 	Lists       json.RawMessage `json:"lists,omitempty"`
 	Lanes       json.RawMessage `json:"lanes,omitempty"`
 	LaneTimes   int             `json:"lanes_times"`
 	Structure   BoardStructure  `json:"structure"`
+	ListDefs    []ListDef       `json:"list_defs,omitempty"`
+	LaneDefs    []LaneDef       `json:"lane_defs,omitempty"`
 	Users       []BoardUser     `json:"users,omitempty"`
 	CurrentUser *BoardUser      `json:"current_user,omitempty"`
+}
+
+type ListDef struct {
+	ListID       string `json:"list_id"`
+	ListName     string `json:"list_name"`
+	IsFinishList bool   `json:"is_finish_list,omitempty"`
+}
+
+type LaneDef struct {
+	LaneID   string `json:"lane_id"`
+	LaneName string `json:"lane_name"`
 }
 
 type BoardStructure struct {
@@ -50,7 +64,10 @@ type Story struct {
 	HasDesc      any             `json:"has_desc"`
 	LaneID       any             `json:"lane_id,omitempty"`
 	ListID       any             `json:"list_id,omitempty"`
+	BlockID      string          `json:"block_id,omitempty"`
+	CardTypeID   string          `json:"card_type_id,omitempty"`
 	CardTypeName string          `json:"card_type_name,omitempty"`
+	CardTypeCat  any             `json:"card_type_category,omitempty"`
 	Raw          json.RawMessage `json:"raw,omitempty"`
 }
 
@@ -115,10 +132,21 @@ func LoadBoardContext(c *client.Client, boardUUID string) (*BoardContext, error)
 	if v, ok := bdObj["lists"]; ok {
 		ctx.Lists = v
 		ctx.Structure.ListCount, ctx.Structure.ListNames = countNamed(v, "list_name", "name")
+		ctx.ListDefs = parseListDefs(v)
 	}
 	if v, ok := bdObj["lanes"]; ok {
 		ctx.Lanes = v
 		ctx.Structure.LaneCount, ctx.Structure.LaneNames = countNamed(v, "lane_name", "name")
+		ctx.LaneDefs = parseLaneDefs(v)
+	}
+	if b, ok := bdObj["board"]; ok {
+		var board map[string]any
+		if json.Unmarshal(b, &board) == nil {
+			ctx.BoardName = firstString(board, "board_name", "name")
+			if ctx.BoardID == "" {
+				ctx.BoardID = fmt.Sprint(board["board_id"])
+			}
+		}
 	}
 	if v, ok := bdObj["lanes_times"]; ok {
 		var n json.Number
@@ -241,6 +269,49 @@ func countNamed(raw json.RawMessage, keys ...string) (int, []string) {
 		names = append(names, name)
 	}
 	return len(arr), names
+}
+
+func parseListDefs(raw json.RawMessage) []ListDef {
+	var arr []map[string]any
+	if err := json.Unmarshal(raw, &arr); err != nil {
+		return nil
+	}
+	out := make([]ListDef, 0, len(arr))
+	for _, item := range arr {
+		id := firstString(item, "list_id", "id")
+		name := firstString(item, "list_name", "name")
+		if id == "" {
+			continue
+		}
+		finish := false
+		switch v := item["is_finish_list"].(type) {
+		case bool:
+			finish = v
+		case float64:
+			finish = v != 0
+		case string:
+			finish = v == "1" || strings.EqualFold(v, "true")
+		}
+		out = append(out, ListDef{ListID: id, ListName: name, IsFinishList: finish})
+	}
+	return out
+}
+
+func parseLaneDefs(raw json.RawMessage) []LaneDef {
+	var arr []map[string]any
+	if err := json.Unmarshal(raw, &arr); err != nil {
+		return nil
+	}
+	out := make([]LaneDef, 0, len(arr))
+	for _, item := range arr {
+		id := firstString(item, "lane_id", "id")
+		name := firstString(item, "lane_name", "name")
+		if id == "" {
+			continue
+		}
+		out = append(out, LaneDef{LaneID: id, LaneName: name})
+	}
+	return out
 }
 
 func ListStories(c *client.Client, boardUUID string) (*BoardContext, []Story, error) {
@@ -611,6 +682,15 @@ func storiesFromTasks(tasksRaw json.RawMessage, laneID, listID json.RawMessage) 
 		}
 		if v, ok := t["card_type_name"]; ok {
 			s.CardTypeName = fmt.Sprint(v)
+		}
+		if v, ok := t["card_type_id"]; ok {
+			s.CardTypeID = fmt.Sprint(v)
+		}
+		if v, ok := t["card_type_category"]; ok {
+			s.CardTypeCat = v
+		}
+		if v, ok := t["block_id"]; ok {
+			s.BlockID = fmt.Sprint(v)
 		}
 		if laneID != nil {
 			_ = json.Unmarshal(laneID, &s.LaneID)

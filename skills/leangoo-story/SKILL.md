@@ -1,10 +1,10 @@
 ---
 name: leangoo-story
 description: >-
-  用 leangoo CLI 列出 Sprint 下 Story（卡片/Task），按成员(--user)或标签(--tag)筛选，
-  获取标题、点数、成员、标签、描述与动态历史。支持用户粘贴的 lg.team 看板链接
-  （/kanban/board/go/{board_uuid} 或 /{board_uuid}/{task_uuid}）。
-  用户提到领歌 Story、卡片、任务、点数、标签、工时标签、描述、动态、看板链接时使用。
+  用 leangoo CLI 列出/创建/编辑/删除 Sprint 下 Story（卡片/Task），按成员(--user)或标签(--tag)筛选，
+  评论、日期、成员、标签、检查项、完成勾选、实际工时、复制/移动/引用。
+  支持用户粘贴的 lg.team 看板链接（/kanban/board/go/{board_uuid} 或 /{board_uuid}/{task_uuid}）。
+  用户提到领歌 Story、卡片、任务、点数、标签、检查项、评论、看板链接时使用。
   依赖已登录会话；企业/项目导航见 leangoo-sprint。
 ---
 
@@ -76,14 +76,67 @@ leangoo story get '<含 board+task 的完整 URL>'
 - `description`：正文（`getTaskDesc`）
 - `activities`：动态/历史（`getTaskActivity`）
 
+## 写操作（破坏性命令加 `--yes`）
+
+```bash
+# 创建 / 编辑 / 删除
+leangoo story create --sprint <board|url> --title '标题' [--list todo] [--lane ...]
+leangoo story edit <task> --sprint <board> [--title ...] [--desc ...] [--estimate 3]
+leangoo story delete <task> --sprint <board> --yes
+
+# 复制 / 移动 / 引用
+leangoo story copy <task> --sprint <board> --to-list todo --yes
+leangoo story move <task> --sprint <board> --to-list doing --yes
+leangoo story shortcut <task> --sprint <board> --to-list todo --yes
+
+# 评论 / 日期 / 完成 / 工时
+leangoo story comment <task> --sprint <board> --text '评论内容'
+leangoo story comments <task> --sprint <board>
+leangoo story set-dates <task> --sprint <board> --start '2026-08-07 09:00' --due '2026-08-10 18:00'
+leangoo story set-dates <task> --sprint <board> --clear-start --clear-due
+leangoo story set-done <task> --sprint <board> --done=true|false
+leangoo story set-hours <task> --sprint <board> --hours 2.5
+leangoo story set-type <task> --sprint <board> --type-id -1
+
+# 成员 / 标签
+leangoo story member-add <task> --sprint <board> --user me
+leangoo story member-remove <task> --sprint <board> --user 刘源
+leangoo story board-tags --sprint <board>          # 看板上可用标签
+leangoo story tag-add <task> --sprint <board> --tag 开发任务
+leangoo story tag-remove <task> --sprint <board> --tag 开发任务
+
+# 检查清单
+leangoo story checklist <task> --sprint <board>
+leangoo story checklist-add <task> --sprint <board> --name '验收'
+leangoo story checklist-item-add <task> --sprint <board> --checklist <uuid> --text '项'
+leangoo story checklist-item-done <task> --sprint <board> --checklist <uuid> --item <uuid> --done=true
+leangoo story checklist-delete <task> --sprint <board> --checklist <uuid> --yes
+
+# 附件 / 关联 / 依赖 / 批量
+leangoo story attachments <task> --sprint <board>
+leangoo story attach-link <task> --sprint <board> --url 'https://example.com'
+leangoo story attach-upload <task> --sprint <board> --file ./a.txt
+leangoo story attach-delete <task> --sprint <board> --file-id <id> --yes
+leangoo story connects <task> --sprint <board>
+leangoo story connect-add <task> --sprint <board> --url 'https://example.com' --title '链接'
+leangoo story relate <task> --sprint <board> --to <other_task> --position post
+leangoo story batch-delete --sprint <board> --task <id> --task <id2> --yes
+leangoo story batch-member --sprint <board> --user me --task <id> --yes
+leangoo story batch-tag --sprint <board> --tag 开发任务 --task <id> --yes
+```
+
+`<task>` 可为 `task_id` / `task_uuid` / 标题 / 完整卡片 URL。日期格式 `yyyy-MM-dd HH:mm`（无提醒）。
+
 ## Agent 工作流
 
 1. 用户给了链接 → 按上表直接调用（优先完整 URL）
 2. 若无链接也无 `board_uuid` → 用 `leangoo-sprint` 定位
 3. `story list` 浏览/筛选；需要正文/历史再 `story get`
-4. 总结时区分「列表摘要」与「详情」，勿把 `has_desc=Y` 当成已有正文
+4. 写操作前确认目标看板；删除/移动/复制必须带 `--yes`
+5. 总结时区分「列表摘要」与「详情」，勿把 `has_desc=Y` 当成已有正文
 
 ## 注意
 
 - 输出为 JSON；卡片很多时先摘要标题/点数/成员/标签
 - 会话失效时按 `leangoo-shared` 重新登录
+- 示例板冒烟可用：`016a3cef-0330-63a0-8000-b6614969d35e`（勿残留测试卡）

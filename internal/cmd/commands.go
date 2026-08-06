@@ -359,6 +359,8 @@ func sprintCmd() *cobra.Command {
 		},
 	}
 	cmd.AddCommand(getCmd)
+	addSprintWriteCommands(cmd)
+	addSprintExtraCommands(cmd)
 	return cmd
 }
 
@@ -498,6 +500,8 @@ func storyCmd() *cobra.Command {
 	}
 	tagsCmd.Flags().StringVar(&sprint, "sprint", "", "看板 UUID 或 lg.team 看板链接")
 	cmd.AddCommand(tagsCmd)
+	addStoryWriteCommands(cmd)
+	addStoryExtraCommands(cmd)
 	return cmd
 }
 

@@ -63,8 +63,35 @@ leangoo sprint get <board_uuid|board_url>    # 泳道行数、列数、名称
 - `lane_count` / `lane_names`：泳道（行）
 - `list_count` / `list_names`：列
 
+## 看板写操作
+
+```bash
+leangoo sprint set-status <board|url> --status unset|pending|ongoing|finished
+leangoo sprint set-period <board|url> --begin 2026-08-01 --end 2026-08-14
+leangoo sprint rename <board|url> --name 'Sprint 2'
+
+# 列 / 泳道
+leangoo list add --sprint <board> --name 'review'
+leangoo list rename --sprint <board> --list todo --name '待办'
+leangoo list set-done --sprint <board> --list done --done=true
+leangoo list delete --sprint <board> --list <id|名> --yes
+leangoo lane add --sprint <board> --name '泳道A'
+leangoo lane delete --sprint <board> --lane <id|名> --yes
+leangoo list copy <list> --sprint <board> --yes
+leangoo lane copy <lane> --sprint <board> --yes
+
+# 收藏 / 动态 / 导出 / 回收站
+leangoo sprint star <board>
+leangoo sprint star <board> --unstar
+leangoo sprint activity <board>
+leangoo sprint export-excel <board>
+leangoo recycle list --sprint <board>
+leangoo recycle restore-task <task_id> --sprint <board> --list todo --yes
+```
+
 ## Agent 工作流
 
 1. 用户给了看板链接 → 直接 `sprint get` / `story list --sprint '<URL>'`
 2. 否则：`ent list` → `ent use` → `project list` → `sprint list`
 3. 卡片交给 `leangoo-story`
+4. 改看板状态/周期/列泳道用本 skill 的写命令；删除需 `--yes`

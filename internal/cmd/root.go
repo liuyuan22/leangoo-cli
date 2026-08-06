@@ -31,6 +31,9 @@ func init() {
 	rootCmd.AddCommand(projectCmd())
 	rootCmd.AddCommand(sprintCmd())
 	rootCmd.AddCommand(storyCmd())
+	rootCmd.AddCommand(listCmd())
+	rootCmd.AddCommand(laneCmd())
+	rootCmd.AddCommand(recycleCmd())
 	rootCmd.AddCommand(versionCmd())
 }
 

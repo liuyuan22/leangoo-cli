@@ -1,9 +1,11 @@
 package client
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strings"
@@ -23,7 +25,7 @@ type Client struct {
 type APIResponse struct {
 	Succeed   any             `json:"succeed"`
 	Message   json.RawMessage `json:"message"`
-	ErrorCode int             `json:"error_code"`
+	ErrorCode any             `json:"error_code"` // number or string
 }
 
 func (r APIResponse) OK() bool {
@@ -105,7 +107,92 @@ func (c *Client) PostForm(path string, form url.Values) (*APIResponse, []byte, e
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
 	req.Header.Set("Accept", "application/json, text/javascript, */*; q=0.01")
 	req.Header.Set("X-Requested-With", "XMLHttpRequest")
-	req.Header.Set("User-Agent", "leangoo-cli/0.1")
+	req.Header.Set("User-Agent", "leangoo-cli/1.0")
+	return c.doJSON(req)
+}
+
+// PostFormRaw POSTs form data and returns the raw body without requiring {succeed,message} shape.
+func (c *Client) PostFormRaw(path string, form url.Values) ([]byte, error) {
+	req, err := http.NewRequest(http.MethodPost, c.URL(path), strings.NewReader(form.Encode()))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+	req.Header.Set("Accept", "application/json, text/javascript, */*; q=0.01")
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.Header.Set("User-Agent", "leangoo-cli/1.0")
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode >= 400 {
+		return body, fmt.Errorf("HTTP %d: %s", resp.StatusCode, truncate(string(body), 200))
+	}
+	return body, nil
+}
+
+// GetRaw GETs and returns the raw body (for endpoints that are not {succeed,message}).
+func (c *Client) GetRaw(path string, query url.Values) ([]byte, error) {
+	u := c.URL(path)
+	if len(query) > 0 {
+		u += "?" + query.Encode()
+	}
+	req, err := http.NewRequest(http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/json, text/javascript, */*; q=0.01")
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.Header.Set("User-Agent", "leangoo-cli/1.0")
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode >= 400 {
+		return body, fmt.Errorf("HTTP %d: %s", resp.StatusCode, truncate(string(body), 200))
+	}
+	return body, nil
+}
+
+// PostMultipart uploads a file with optional form fields (jquery-fileupload style).
+func (c *Client) PostMultipart(path string, fields map[string]string, fileField, filename string, file io.Reader) (*APIResponse, []byte, error) {
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	for k, v := range fields {
+		if err := w.WriteField(k, v); err != nil {
+			return nil, nil, err
+		}
+	}
+	if file != nil && fileField != "" {
+		part, err := w.CreateFormFile(fileField, filename)
+		if err != nil {
+			return nil, nil, err
+		}
+		if _, err := io.Copy(part, file); err != nil {
+			return nil, nil, err
+		}
+	}
+	if err := w.Close(); err != nil {
+		return nil, nil, err
+	}
+	req, err := http.NewRequest(http.MethodPost, c.URL(path), &buf)
+	if err != nil {
+		return nil, nil, err
+	}
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	req.Header.Set("Accept", "application/json, text/javascript, */*; q=0.01")
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.Header.Set("User-Agent", "leangoo-cli/1.0")
 	return c.doJSON(req)
 }
 
@@ -120,7 +207,7 @@ func (c *Client) Get(path string, query url.Values) (*APIResponse, []byte, error
 	}
 	req.Header.Set("Accept", "application/json, text/javascript, */*; q=0.01")
 	req.Header.Set("X-Requested-With", "XMLHttpRequest")
-	req.Header.Set("User-Agent", "leangoo-cli/0.1")
+	req.Header.Set("User-Agent", "leangoo-cli/1.0")
 	return c.doJSON(req)
 }
 
@@ -134,7 +221,7 @@ func (c *Client) GetHTML(path string) (string, error) {
 		return "", err
 	}
 	req.Header.Set("Accept", "text/html,application/xhtml+xml")
-	req.Header.Set("User-Agent", "leangoo-cli/0.1")
+	req.Header.Set("User-Agent", "leangoo-cli/1.0")
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return "", err
@@ -179,6 +266,96 @@ func (c *Client) PersistCookies(homeURL string) {
 		c.Session = &session.Session{}
 	}
 	c.Session.Cookies = session.CaptureJar(c.Jar, urls...)
+}
+
+// NewAPIBase returns NEW_LEANGOO_WEB_URL from session (no trailing slash).
+func (c *Client) NewAPIBase() (string, error) {
+	if c.Session != nil {
+		u := strings.TrimSpace(c.Session.NewLeangooWebURL)
+		if u != "" {
+			return strings.TrimRight(u, "/"), nil
+		}
+	}
+	return "", fmt.Errorf("缺少 NEW_LEANGOO_WEB_URL，请先打开过看板页（如 leangoo sprint get <uuid>）")
+}
+
+func (c *Client) newAPIURL(path string) (string, error) {
+	base, err := c.NewAPIBase()
+	if err != nil {
+		return "", err
+	}
+	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
+		return path, nil
+	}
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	return base + path, nil
+}
+
+func (c *Client) PostJSON(path string, body any) (*APIResponse, []byte, error) {
+	return c.doJSONBody(http.MethodPost, path, body, true)
+}
+
+// PostJSONKanban POSTs JSON to the main /kanban host (not NEW_LEANGOO).
+func (c *Client) PostJSONKanban(path string, body any) (*APIResponse, []byte, error) {
+	return c.doJSONBody(http.MethodPost, path, body, false)
+}
+
+func (c *Client) PutJSON(path string, body any) (*APIResponse, []byte, error) {
+	return c.doJSONBody(http.MethodPut, path, body, true)
+}
+
+func (c *Client) DeleteJSON(path string, body any) (*APIResponse, []byte, error) {
+	return c.doJSONBody(http.MethodDelete, path, body, true)
+}
+
+func (c *Client) GetNewJSON(path string, query url.Values) (*APIResponse, []byte, error) {
+	u, err := c.newAPIURL(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(query) > 0 {
+		u += "?" + query.Encode()
+	}
+	req, err := http.NewRequest(http.MethodGet, u, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	req.Header.Set("Accept", "application/json, text/javascript, */*; q=0.01")
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.Header.Set("User-Agent", "leangoo-cli/1.0")
+	return c.doJSON(req)
+}
+
+func (c *Client) doJSONBody(method, path string, body any, newAPI bool) (*APIResponse, []byte, error) {
+	var u string
+	var err error
+	if newAPI {
+		u, err = c.newAPIURL(path)
+	} else {
+		u = c.URL(path)
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	var rdr io.Reader
+	if body != nil {
+		b, err := json.Marshal(body)
+		if err != nil {
+			return nil, nil, err
+		}
+		rdr = strings.NewReader(string(b))
+	}
+	req, err := http.NewRequest(method, u, rdr)
+	if err != nil {
+		return nil, nil, err
+	}
+	req.Header.Set("Content-Type", "application/json;charset=UTF-8")
+	req.Header.Set("Accept", "application/json, text/javascript, */*; q=0.01")
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.Header.Set("User-Agent", "leangoo-cli/1.0")
+	return c.doJSON(req)
 }
 
 func truncate(s string, n int) string {
