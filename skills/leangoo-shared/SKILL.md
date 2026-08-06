@@ -1,7 +1,7 @@
 ---
 name: leangoo-shared
 description: >-
-  Leangoo（领歌）CLI 共享规则：安装 leangoo 二进制、auth 登录/退出/状态、会话目录、
+  Leangoo（领歌）CLI 共享规则：安装/更新 leangoo 二进制、auth 登录/退出/状态、会话目录、
   企业切换前提、JSON 输出约定、顶层命令索引。在用户提到领歌、lg.team、Leangoo、看板登录，
   或执行任何 leangoo 命令前未登录/会话过期时使用。写操作（建卡、改卡、列泳道等）也依赖本 skill 的登录检查。
 ---
@@ -23,6 +23,16 @@ go build -o bin/leangoo ./cmd/leangoo
 # 或
 curl -fsSL https://raw.githubusercontent.com/liuyuan22/leangoo-cli/main/scripts/install.sh | bash
 ```
+
+更新（覆盖当前二进制，默认同步 Skills）：
+
+```bash
+leangoo update              # 最新
+leangoo update --check
+leangoo update --version v1.1.0
+```
+
+若当前二进制还没有 `update` 子命令，先再跑一次安装脚本。
 
 Agent 优先用 PATH 中的 `leangoo`；仅有仓库产物时用绝对路径或 `./bin/leangoo`。
 
@@ -64,6 +74,7 @@ leangoo auth login --phone <手机号> --code <验证码>
 | 命令 | Skill | 用途 |
 |------|--------|------|
 | `auth` | 本 skill | 登录/退出/状态 |
+| `update` | 本 skill | 从 GitHub Releases 自更新 |
 | `ent` / `project` / `sprint` | `leangoo-sprint` | 企业、项目、看板读写、动态、导出、收藏 |
 | `list` / `lane` / `recycle` | `leangoo-sprint` | 列、泳道、回收站 |
 | `story` | `leangoo-story` | 卡片读写（含附件/标签/检查项/关联/批量） |

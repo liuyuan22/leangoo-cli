@@ -15,6 +15,16 @@ curl -fsSL https://raw.githubusercontent.com/liuyuan22/leangoo-cli/main/scripts/
 
 默认安装到 `~/.local/bin/leangoo`，并把 Skills 拷到 `~/.cursor/skills` 与 `~/.claude/skills`。
 
+### 更新
+
+```bash
+leangoo update              # 升到最新 Release（覆盖当前二进制，默认同步 Skills）
+leangoo update --check      # 只检查
+leangoo update --version v1.1.0
+```
+
+旧版本若还没有 `update` 命令，先再跑一次上面的安装脚本，之后即可用 `leangoo update`。
+
 ### 卸载
 
 ```bash
