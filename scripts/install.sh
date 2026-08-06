@@ -2,7 +2,7 @@
 # 安装 leangoo CLI + Agent Skills（GitHub Releases，公开仓库无需 token）
 #
 #   curl -fsSL https://raw.githubusercontent.com/liuyuan22/leangoo-cli/main/scripts/install.sh | bash
-#   curl -fsSL ... | bash -s -- v0.1.0
+#   curl -fsSL ... | bash -s -- v1.2.0
 #
 # 或仓库内：bash scripts/install.sh [version]
 #
@@ -10,6 +10,7 @@
 #   GITHUB_REPO     默认 liuyuan22/leangoo-cli
 #   INSTALL_DIR     默认 ~/.local/bin
 #   INSTALL_SKILLS  默认 1
+#   GITHUB_TOKEN / GH_TOKEN  可选；仅在走 API 回退时使用
 set -euo pipefail
 
 GITHUB_REPO="${GITHUB_REPO:-liuyuan22/leangoo-cli}"
@@ -34,24 +35,65 @@ case "$arch" in
   *) echo "不支持的架构: $arch" >&2; exit 1 ;;
 esac
 
-if [[ -z "$VERSION" || "$VERSION" == "latest" ]]; then
-  echo "==> 查询最新 Release…"
-  VERSION="$(curl -fsSL "${API}/releases/latest" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
-  if [[ -z "$VERSION" ]]; then
-    echo "无法解析最新 tag。可手动指定：bash install.sh v0.1.0" >&2
-    exit 1
-  fi
-fi
-echo "==> 版本: $VERSION"
-
 asset_name="leangoo_${goos}_${goarch}.tar.gz"
 if [[ "$goos" == "Windows" ]]; then
   asset_name="leangoo_${goos}_${goarch}.zip"
 fi
 echo "==> 资源: $asset_name"
 
-rel_json="$(curl -fsSL "${API}/releases/tags/${VERSION}")"
-asset_url="$(printf '%s' "$rel_json" | python3 -c "
+# 从 github.com/releases/latest 的 Location 解析 tag（不走 api.github.com，避免 403 限流）
+resolve_latest_tag() {
+  local headers loc
+  # 不要 -L：需要读 302 Location；-f 会对 3xx 误判，故不用 -f
+  headers="$(curl -sSI --max-redirs 0 "https://github.com/${GITHUB_REPO}/releases/latest" 2>/dev/null || true)"
+  loc="$(printf '%s' "$headers" | tr -d '\r' | awk 'tolower($1)=="location:"{print $2; exit}')"
+  if [[ -z "$loc" ]]; then
+    return 1
+  fi
+  printf '%s' "$loc" | sed -n 's|.*/releases/tag/\([^/?#]*\).*|\1|p' | head -1
+}
+
+api_auth_args=()
+if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+  api_auth_args=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
+elif [[ -n "${GH_TOKEN:-}" ]]; then
+  api_auth_args=(-H "Authorization: Bearer ${GH_TOKEN}")
+fi
+
+if [[ -z "$VERSION" || "$VERSION" == "latest" ]]; then
+  echo "==> 查询最新 Release…"
+  VERSION="$(resolve_latest_tag || true)"
+  if [[ -z "$VERSION" ]]; then
+    # 可选：带 token 时回退 API
+    VERSION="$(curl -fsSL "${api_auth_args[@]}" -H "Accept: application/vnd.github+json" -H "User-Agent: leangoo-install" \
+      "${API}/releases/latest" 2>/dev/null \
+      | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1 || true)"
+  fi
+  if [[ -z "$VERSION" ]]; then
+    echo "无法解析最新 tag（GitHub API 可能被限流）。可手动指定：bash install.sh v1.2.0" >&2
+    echo "或设置 GITHUB_TOKEN / GH_TOKEN 后再试。" >&2
+    exit 1
+  fi
+  asset_url="https://github.com/${GITHUB_REPO}/releases/latest/download/${asset_name}"
+else
+  case "$VERSION" in
+    v*) ;;
+    *) VERSION="v${VERSION}" ;;
+  esac
+  asset_url="https://github.com/${GITHUB_REPO}/releases/download/${VERSION}/${asset_name}"
+fi
+echo "==> 版本: $VERSION"
+
+tmpdir="$(mktemp -d)"
+trap 'rm -rf "$tmpdir"' EXIT
+archive="$tmpdir/$asset_name"
+echo "==> 下载…"
+if ! curl -fL -o "$archive" -A "leangoo-install" "$asset_url"; then
+  echo "直链下载失败: $asset_url" >&2
+  echo "尝试通过 GitHub API 解析 asset…" >&2
+  rel_json="$(curl -fsSL "${api_auth_args[@]}" -H "Accept: application/vnd.github+json" -H "User-Agent: leangoo-install" \
+    "${API}/releases/tags/${VERSION}" 2>/dev/null || true)"
+  asset_url="$(printf '%s' "$rel_json" | python3 -c "
 import json,sys
 name=sys.argv[1]
 d=json.load(sys.stdin)
@@ -60,23 +102,12 @@ for a in d.get('assets') or []:
         print(a.get('browser_download_url') or ''); sys.exit(0)
 sys.exit(1)
 " "$asset_name" 2>/dev/null || true)"
-
-if [[ -z "$asset_url" ]]; then
-  echo "在 Release ${VERSION} 中未找到 ${asset_name}" >&2
-  printf '%s' "$rel_json" | python3 -c '
-import json,sys
-d=json.load(sys.stdin)
-for a in d.get("assets") or []:
-    print(" -", a.get("name"))
-' >&2 || true
-  exit 1
+  if [[ -z "$asset_url" ]]; then
+    echo "在 Release ${VERSION} 中未找到 ${asset_name}" >&2
+    exit 1
+  fi
+  curl -fL -o "$archive" -A "leangoo-install" "$asset_url"
 fi
-
-tmpdir="$(mktemp -d)"
-trap 'rm -rf "$tmpdir"' EXIT
-archive="$tmpdir/$asset_name"
-echo "==> 下载…"
-curl -fL -o "$archive" "$asset_url"
 
 echo "==> 解压到 ${INSTALL_DIR}"
 mkdir -p "$INSTALL_DIR"
@@ -107,7 +138,7 @@ if [[ "$INSTALL_SKILLS" == "1" ]]; then
   fi
   if [[ -z "$skills_src" ]]; then
     skills_archive="$tmpdir/src.tgz"
-    curl -fL -o "$skills_archive" \
+    curl -fL -o "$skills_archive" -A "leangoo-install" \
       "https://github.com/${GITHUB_REPO}/archive/refs/tags/${VERSION}.tar.gz"
     mkdir -p "$tmpdir/repo"
     tar -xzf "$skills_archive" -C "$tmpdir/repo" --strip-components=1
