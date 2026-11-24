@@ -6,7 +6,9 @@ description: >-
   成员/标签/检查项/附件/URL 关联/前后置依赖、批量删除与批量成员标签。
   拆前后端时点数可能在描述（含飞书文档链接）、评论或检查项里，需先定位再 split。
   支持 lg.team 看板与卡片链接。用户提到领歌 Story、卡片、任务、拆前后端、标签、点数、
-  检查项、附件、关联、评论时使用。依赖已登录；导航见 leangoo-sprint。
+  检查项、附件、关联、评论时使用。写评论时合并成一条，标题用「前端修改内容」，
+  不写读者交代、测试例子，以及改完又和改之前一样的过程问题。
+  依赖已登录；导航见 leangoo-sprint。
 ---
 
 # leangoo Story（卡片）
@@ -67,6 +69,18 @@ leangoo story set-type <task> --sprint <board> --type-id -1    # -1 常为「任
 ```
 
 日期无提醒；格式 `yyyy-MM-dd HH:mm`。`edit` 只改传入的 flag，可只传 `--estimate`。
+
+## 评论怎么写
+
+说明性评论只留一条。CLI 只能新增评论，不能改、不能删。要替换时先删掉已有评论，再发一条，不要另补一条把内容拆开。
+
+删评论：从 `story comments` 取出 `comment_id`，用 `~/.leangoo-cli/session.json` 里的 `new_leangoo_web_url` 和 Cookie，对 `DELETE {new_leangoo_web_url}/tasks/{task_uuid}/comments/{comment_id}` 发请求。不要把会话内容写进回复。
+
+正文遵守：
+
+1. 开头写「前端修改内容」。不要写「供测试和产品看」这类交代读者身份的话。
+2. 只写最终相对改之前的行为变化。修改过程中出现、改完又和改之前一样的问题不要写。
+3. 不要写某一次测试的具体例子，例如在哪个数据上勾了几张、数量从多少变成多少。
 
 ## 成员 / 标签
 
